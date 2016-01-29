@@ -1467,6 +1467,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\..\src\video\graph_v.h"
+				>
+			</File>
+			<File
 				RelativePath=".\..\src\object.h"
 				>
 			</File>
@@ -4412,6 +4416,10 @@
 			</File>
 			<File
 				RelativePath=".\..\src\video\null_v.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\..\src\video\graph_v.cpp"
 				>
 			</File>
 			<File

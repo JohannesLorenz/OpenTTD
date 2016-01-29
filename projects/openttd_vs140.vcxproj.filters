@@ -873,6 +873,9 @@
     <ClInclude Include="..\src\video\null_v.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\video\graph_v.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\object.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -3001,6 +3004,9 @@
       <Filter>Video</Filter>
     </ClCompile>
     <ClCompile Include="..\src\video\null_v.cpp">
+      <Filter>Video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\video\graph_v.cpp">
       <Filter>Video</Filter>
     </ClCompile>
     <ClCompile Include="..\src\video\sdl_v.cpp">
