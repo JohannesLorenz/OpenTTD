@@ -33,7 +33,6 @@ int main(int argc, char** argv)
 	float value = 0.0f, hue = 0.0f;
 	std::cout.precision(3);
 
-	const std::size_t num_colors = 4;
 	std::size_t idx = 0;
 
 	std::set<CargoID> used_cargo_ids = { 0 };
@@ -125,9 +124,6 @@ int main(int argc, char** argv)
 				std::cout << "];" << std::endl;
 			};
 
-			//std::cout << "\t" << ol.stations.front();
-			bool last_was_double_edge;
-
 			enum class edge_type_t
 			{
 				unique,
@@ -139,11 +135,7 @@ int main(int argc, char** argv)
 			for(std::vector<StationID>::const_iterator itr = ol.stations.begin() + 1;
 				itr != ol.stations.end(); ++itr)
 			{
-			//	if(only_double_edges && !ol.is_cycle && idx > mid)
-			//	 break;
-
 				const bool first = itr == ol.stations.begin();
-
 
 				edge_type_t edge_type = edge_type_t::unique;
 
@@ -166,46 +158,14 @@ int main(int argc, char** argv)
 				// second for loop is skipped
 				// => duplicate_further wins
 
-				//if(last_edge_type == edge_type_t::duplicate_further||
-				//	((edge_type != edge_type_t::duplicate_further) && edge_type != last_edge_type))
-
 				if(last_edge_type != edge_type_t::duplicate_further && edge_type != last_edge_type)
-				{
-					print_end(last_edge_type == edge_type_t::duplicate_first);
-				//	if(edge_type != edge_type_t::duplicate_further)
-				//	 std::cout << "\t" << *(itr - 1); // go on in next line
-				}
+				 print_end(last_edge_type == edge_type_t::duplicate_first);
 
 				if(edge_type != last_edge_type && edge_type != edge_type_t::duplicate_further)
-				{
-					if(edge_type != edge_type_t::duplicate_further)
-					 std::cout << "\t" << *(itr - 1);
-				}
+				 std::cout << "\t" << *(itr - 1);
 
-				//else
-				{
-				/*	if((last_edge_type != edge_type_t::duplicate_further) && edge_type != last_edge_type)
-					{
-						print_end(last_edge_type == edge_type_t::duplicate_first);
-					//	if(edge_type != edge_type_t::duplicate_further)
-					//	 std::cout << "\t" << *(itr - 1); // go on in next line
-					}*/
-					if(edge_type != edge_type_t::duplicate_further)
-					 std::cout << " -> " << *itr;
-				}
-
-		/*		if(!first && edge_type != last_edge_type)
-				{
-					print_end(last_was_double_edge);
-				//	std::cout << "\t" << *(itr - 1); // go on in next line
-				}
-
-
-
-				if(!first)
-				{
-					std::cout << " -> " << *itr;
-				}*/
+				if(edge_type != edge_type_t::duplicate_further)
+				 std::cout << " -> " << *itr;
 
 				if(file.stations.find(*itr) == file.stations.end())
 				{
@@ -213,51 +173,11 @@ int main(int argc, char** argv)
 					throw std::runtime_error("invalid station id in order list");
 				}
 
-				//recent = itr;
 				last_edge_type = edge_type;
 			}
 
 			if(last_edge_type != edge_type_t::duplicate_further)
 			 print_end(last_edge_type == edge_type_t::duplicate_first);
-
-			//if(!(only_double_edges && !ol.is_cycle))
-			// std::cout << " -> " << ol.stations.front();
-
-
-
-
-
-/*			// draw in one line
-			if(!double_edges || only_double_edges)
-			{
-				std::cout << ol.stations.front();
-				std::size_t idx = 0;
-				for(std::vector<StationID>::const_iterator itr = ol.stations.begin();
-					itr != ol.stations.end(); ++itr, ++idx)
-				{
-					if(only_double_edges && !ol.is_cycle && idx > mid)
-					 break;
-
-					if(file.stations.find(*itr) == file.stations.end())
-					{
-						std::cerr << "Could not find station id " << *itr << std::endl;
-						throw std::runtime_error("invalid station id in order list");
-					}
-
-					if(itr != ol.stations.begin())
-					{
-						std::cout << " -> "
-							<< *itr;
-					}
-					recent = itr;
-				}
-				if(!(only_double_edges && !ol.is_cycle))
-				 std::cout << " -> " << ol.stations.front();
-			}
-			else
-			{
-
-			}*/
 		}
 	}
 
