@@ -71,16 +71,7 @@ void VideoDriver_Graph::MainLoop()
 		assert(false);
 	}
 
-/*	std::multiset<order_list> order_lists;
-	std::map<StationID, station_info> stations;*/
 	railnet_file_info file;
-
-	//std::map<CargoID, std::string> cargo_names;
-
-	/*FOR_ALL_STATIONS(st) {
-		SetDParam(0, st->index); GetString(buf, STR_STATION_NAME, lastof(buf));
-		std::cout << buf << std::endl;
-	}*/
 
 	std::vector<bool> stations_used;
 	stations_used.resize(_station_pool.size, false);
@@ -132,9 +123,6 @@ void VideoDriver_Graph::MainLoop()
 			// change the correct order. however, we do only changes
 			// for the cycle bits, they have no effect.
 			order_list& already_added = const_cast<order_list&>(*itr);
-
-			if(already_added.stations.front() == 267 && new_ol.stations.front() == 267)
-			 std::cerr << "267" << std::endl;
 
 			// if the cargo types are no subsets, then it is another line
 			bool added_is_subset = std::includes(new_ol.cargo.begin(), new_ol.cargo.end(),
@@ -239,7 +227,6 @@ void VideoDriver_Graph::MainLoop()
 	const Station* st;
 	char buf[256];
 
-	std::size_t idx = 0;
 	float scale = 25.0f;
 	FOR_ALL_STATIONS(st) {
 
@@ -247,11 +234,7 @@ void VideoDriver_Graph::MainLoop()
 		{
 			const TileIndex& center = st->xy; // TODO: better algorithm to find center
 			SetDParam(0, st->index); GetString(buf, STR_STATION_NAME, lastof(buf));
-			/*std::cout << "\t" << st->index << " [xlabel=\"" << buf << "\", pos=\""
-				<< (TileX(center)/scale)
-				<< ", "
-				<< (TileY(center)/scale)
-				<< "!\"];" << std::endl;*/
+
 			station_info tmp_station;
 			tmp_station.name = buf;
 			tmp_station.x = (MapSizeX() - TileX(center))/scale;
@@ -267,12 +250,6 @@ void VideoDriver_Graph::MainLoop()
 		if(carg->IsValid())
 		{
 			SetDParam(0, 1 << carg->Index()); GetString(buf, STR_JUST_CARGO_LIST, lastof(buf));
-			/*std::cout << "\t" << st->index << " [xlabel=\"" << buf << "\", pos=\""
-				<< (TileX(center)/scale)
-				<< ", "
-				<< (TileY(center)/scale)
-				<< "!\"];" << std::endl;*/
-
 			file.cargo_names.insert(std::make_pair(carg->Index(), buf));
 		}
 
