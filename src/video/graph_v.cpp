@@ -10,6 +10,12 @@
 #include "../order_base.h"
 #include "../strings_func.h"
 #include "graph_v.h"
+#include "../mkgraph/common.h"
+
+// for finding paths
+#include "../pbs.h"
+#include "../pathfinder/npf/npf_func.h"
+#include "../pathfinder/yapf/yapf.hpp"
 
 /** Factory for the graph video driver. */
 static FVideoDriver_Graph iFVideoDriver_Graph;
@@ -20,6 +26,35 @@ VideoDriver_Graph::VideoDriver_Graph()
 
 //template<class T> ... (function)
 
+namespace detail {
+
+	template<class T, T v>
+	struct integral_constant
+	{
+		static const T value = v;
+		typedef T value_type;
+	};
+
+	typedef integral_constant<bool, true> true_type;
+	typedef integral_constant<bool, false> false_type;
+
+	template<class T, class U>
+	struct is_same : false_type {};
+
+	template<class T>
+	struct is_same<T, T> : true_type {};
+}
+
+static Track DoTrainPathfind(const Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool &path_found, bool do_track_reservation, PBSTileInfo *dest)
+{
+	switch (_settings_game.pf.pathfinder_for_trains) {
+		case VPF_NPF: return NPFTrainChooseTrack(v, tile, enterdir, tracks, path_found, do_track_reservation, dest);
+		case VPF_YAPF: return YapfTrainChooseTrack(v, tile, enterdir, tracks, path_found, do_track_reservation, dest);
+
+		default: NOT_REACHED();
+	}
+}
+
 void VideoDriver_Graph::MainLoop()
 {
 	//uint i;
@@ -28,20 +63,19 @@ void VideoDriver_Graph::MainLoop()
 		UpdateWindows();
 	//}
 
-	struct order_list
+	if(!detail::is_same<CargoID, byte>::value ||
+		!detail::is_same<StationID, uint16>::value)
 	{
-		bool is_cycle;
-		bool is_bicycle; //! at least two trains that drive in opposite cycles
-		StationID min_station;
-		std::set<CargoID> cargo; // cargo order and amount does not matter
-		std::vector<StationID> stations;
-		bool operator<(const order_list& other) const {
-			return (min_station == other.min_station)
-				? stations.size() < other.stations.size()
-				: min_station < other.min_station; }
-	};
+		std::cerr << "Error! Types changed in OpenTTD. "
+			"Programmers must fix this here." << std::endl;
+		assert(false);
+	}
 
-	std::multiset<order_list> order_lists;
+/*	std::multiset<order_list> order_lists;
+	std::map<StationID, station_info> stations;*/
+	railnet_file_info file;
+
+	//std::map<CargoID, std::string> cargo_names;
 
 	/*FOR_ALL_STATIONS(st) {
 		SetDParam(0, st->index); GetString(buf, STR_STATION_NAME, lastof(buf));
@@ -59,16 +93,21 @@ void VideoDriver_Graph::MainLoop()
 		/*
 			basically fill new order list
 		*/
-
-		for (Vehicle *v = _ol->GetFirstSharedVehicle(); v != NULL; v = v->NextShared()) {
-			new_ol.cargo.insert(v->cargo_type);
+//std::cerr << "cargo: ";
+		for (Vehicle *v = _ol->GetFirstSharedVehicle(); v != NULL; v = v->Next())
+		{
+			if(v->cargo_cap) {
+				new_ol.cargo.insert(v->cargo_type);
+//				std::cerr << " " << +v->cargo_type;
+			}
 		}
+//		std::cerr << std::endl;
 		for (Order *order = _ol->GetFirstOrder(); order != NULL; order = order->next)
 		{
 			if (order->IsType(OT_GOTO_STATION) || order->IsType(OT_IMPLICIT))
 			{
 				StationID sid = (StationID)order->GetDestination();
-				// rewrite A->B->B->C as A->B->C
+				// rewrites A->B->B->C as A->B->C
 				if(new_ol.stations.empty() || sid != new_ol.stations.back())
 				 new_ol.stations.push_back(sid);
 				new_ol.min_station = std::min(new_ol.min_station, sid);
@@ -79,7 +118,7 @@ void VideoDriver_Graph::MainLoop()
 		  new_ol.stations.pop_back();
 
 		typedef std::multiset<order_list>::iterator it;
-		std::pair<it, it> itrs = order_lists.equal_range(new_ol);
+		std::pair<it, it> itrs = file.order_lists.equal_range(new_ol);
 		bool this_is_a_new_line = true;
 		if(new_ol.stations.empty())
 		 this_is_a_new_line = false; // consider this already added
@@ -94,6 +133,9 @@ void VideoDriver_Graph::MainLoop()
 			// for the cycle bits, they have no effect.
 			order_list& already_added = const_cast<order_list&>(*itr);
 
+			if(already_added.stations.front() == 267 && new_ol.stations.front() == 267)
+			 std::cerr << "267" << std::endl;
+
 			// if the cargo types are no subsets, then it is another line
 			bool added_is_subset = std::includes(new_ol.cargo.begin(), new_ol.cargo.end(),
 				already_added.cargo.begin(), already_added.cargo.end());
@@ -103,21 +145,26 @@ void VideoDriver_Graph::MainLoop()
 			if(added_is_subset || new_is_subset)
 			{
 				std::size_t start_found = 0;
-				for(std::vector<StationID>::const_iterator sitr
+				std::vector<StationID>::const_iterator sitr
 					= already_added.stations.begin();
-						sitr != already_added.stations.end() &&
+				for( ;
+					sitr != already_added.stations.end() &&
 						*sitr != new_ol.stations.front()
-						; ++sitr, ++start_found)
+					; ++sitr, ++start_found) ;
 
 				if(sitr != already_added.stations.end())
-				{
+				{ // start station found in already added order list?
 
-					bool same_order = true;
+					bool same_order = false;
 
 					std::size_t sz = new_ol.stations.size();
-					for(std::size_t i = 0; i < sz; ++i)
-					 same_order = same_order && (new_ol.stations[i]
-						== already_added.stations[start_found+i%sz]);
+					if(sz == already_added.stations.size())
+					{
+						same_order = true;
+						for(std::size_t i = 0; i < sz; ++i)
+						 same_order = same_order && (new_ol.stations[i]
+							== already_added.stations[start_found+i%sz]);
+					}
 
 					if(same_order)
 					{
@@ -169,7 +216,7 @@ void VideoDriver_Graph::MainLoop()
 			// and earlier abort in many cases
 			for(std::vector<StationID>::const_iterator sitr
 				= new_ol.stations.begin();
-					sitr != new_ol.stations.end() && unique; ++sitr)
+					sitr != new_ol.stations.end(); ++sitr)
 			{
 				stations_used[*sitr] = true;
 				for(std::vector<StationID>::const_iterator sitr2 = sitr;
@@ -177,22 +224,17 @@ void VideoDriver_Graph::MainLoop()
 						unique = unique && (*sitr != *sitr2);
 			}
 
-			new_ol.is_cycle = unique;
+			new_ol.is_cycle = (new_ol.stations.size() > 2) && unique;
 			// bi-cycle at this point is yet forbidden
 			// you could have a train running A->B->C->D->A->D->C->B,
 			// however, passengers wanting to go C->B might get
 			// confused that their train turns around
 
-			order_lists.insert(new_ol);
+			file.order_lists.insert(new_ol);
 		}
 
 	} // for all order lists
 
-
-	std::cout <<	"digraph graphname\n" // TODO: get savegame name
-			"{\n"
-			"\tgraph[splines=line];\n"
-			"\tnode[label=\"\", shape=none, size=0.1, width=1.0, height=0.1];\n";
 	{
 	const Station* st;
 	char buf[256];
@@ -201,46 +243,43 @@ void VideoDriver_Graph::MainLoop()
 	float scale = 25.0f;
 	FOR_ALL_STATIONS(st) {
 
-		if(stations_used[idx++])
+		if(stations_used[st->index])
 		{
 			const TileIndex& center = st->xy; // TODO: better algorithm to find center
 			SetDParam(0, st->index); GetString(buf, STR_STATION_NAME, lastof(buf));
-			std::cout << "\t" << st->index << " [xlabel=\"" << buf << "\", pos=\""
+			/*std::cout << "\t" << st->index << " [xlabel=\"" << buf << "\", pos=\""
 				<< (TileX(center)/scale)
 				<< ", "
 				<< (TileY(center)/scale)
-				<< "!\"];" << std::endl;
+				<< "!\"];" << std::endl;*/
+			station_info tmp_station;
+			tmp_station.name = buf;
+			tmp_station.x = (MapSizeX() - TileX(center))/scale;
+			tmp_station.y = (MapSizeY() - TileY(center))/scale;
+			file.stations.insert(std::make_pair(st->index, tmp_station));
 		}
 
 	}
 
-	const std::size_t num_colors = 4;
-	const char* colors[num_colors] = { "gray", "red", "green", "blue" };
-	idx = 0;
-	for(std::multiset<order_list>::const_iterator itr = order_lists.begin();
-		itr != order_lists.end(); ++itr, ++idx)
+	const CargoSpec* carg;
+	FOR_ALL_CARGOSPECS(carg)
 	{
-		if(itr->stations.size())
+		if(carg->IsValid())
 		{
-			const order_list& ol = *itr;
-			std::vector<StationID>::const_iterator recent;
-			std::cout << ol.stations.front();
-			for(std::vector<StationID>::const_iterator itr = ol.stations.begin();
-				itr != ol.stations.end(); ++itr)
-			{
-				if(itr != ol.stations.begin())
-				{
-					std::cout << " -> "
-						<< *itr;
-				}
-				recent = itr;
-			}
-			std::cout << " -> " << ol.stations.front();
-			std::cout << " [color=\"" << colors[idx%num_colors] << "\"];" << std::endl;
+			SetDParam(0, 1 << carg->Index()); GetString(buf, STR_JUST_CARGO_LIST, lastof(buf));
+			/*std::cout << "\t" << st->index << " [xlabel=\"" << buf << "\", pos=\""
+				<< (TileX(center)/scale)
+				<< ", "
+				<< (TileY(center)/scale)
+				<< "!\"];" << std::endl;*/
+
+			file.cargo_names.insert(std::make_pair(carg->Index(), buf));
 		}
-	}
 
 	}
-	std::cout <<	"}";
+
+	serialize(file, std::cout);
+
+	}
 }
 
