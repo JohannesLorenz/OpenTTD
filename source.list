@@ -82,6 +82,7 @@ sprite.cpp
 spritecache.cpp
 station.cpp
 strgen/strgen_base.cpp
+mkgraph/common.cpp
 string.cpp
 stringfilter.cpp
 strings.cpp
@@ -342,6 +343,7 @@ stdafx.h
 story_base.h
 story_type.h
 strgen/strgen.h
+mkgraph/common.h
 string_base.h
 string_func.h
 string_type.h
