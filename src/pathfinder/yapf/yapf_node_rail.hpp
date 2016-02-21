@@ -12,6 +12,9 @@
 #ifndef YAPF_NODE_RAIL_HPP
 #define YAPF_NODE_RAIL_HPP
 
+#include "nodelist.hpp"
+#include "yapf_node.hpp"
+
 /** key for cached segment cost for rail YAPF */
 struct CYapfRailSegmentKey
 {
@@ -187,14 +190,14 @@ struct CYapfRailNodeT
 	}
 
 	template <class Tbase, class Tfunc, class Tpf>
-	bool IterateTiles(const Train *v, Tpf &yapf, Tbase &obj, bool (Tfunc::*func)(TileIndex, Trackdir)) const
+	bool IterateTiles(const Train *v, Tpf &yapf, Tbase &obj, Tfunc& funct, bool (Tfunc::*func)(TileIndex, Trackdir)) const
 	{
 		typename Tbase::TrackFollower ft(v, yapf.GetCompatibleRailTypes());
 		TileIndex cur = base::GetTile();
 		Trackdir  cur_td = base::GetTrackdir();
 
 		while (cur != GetLastTile() || cur_td != GetLastTrackdir()) {
-			if (!((obj.*func)(cur, cur_td))) return false;
+			if (!((funct.*func)(cur, cur_td))) return false;
 
 			if (!ft.Follow(cur, cur_td)) break;
 			cur = ft.m_new_tile;
@@ -202,7 +205,13 @@ struct CYapfRailNodeT
 			cur_td = FindFirstTrackdir(ft.m_new_td_bits);
 		}
 
-		return (obj.*func)(cur, cur_td);
+		return (funct.*func)(cur, cur_td);
+	}
+
+	template <class Tbase, class Tfunc, class Tpf>
+	bool IterateTiles(const Train *v, Tpf &yapf, Tbase &obj, bool (Tfunc::*func)(TileIndex, Trackdir)) const
+	{
+		return IterateTiles(v, yapf, obj, obj, func);
 	}
 
 	void Dump(DumpTarget &dmp) const

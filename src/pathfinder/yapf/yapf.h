@@ -97,4 +97,24 @@ bool YapfTrainCheckReverse(const Train *v);
  */
 bool YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, bool override_railtype);
 
+class StationFtor
+{
+	virtual void OnStationTile(const TileIndex& t, const Trackdir& td) = 0;
+public:
+	void operator()(const TileIndex& t, const Trackdir& td) {
+		OnStationTile(t, td); }
+};
+
+/**
+ * Finds the best path for given train using YAPF and
+ * executes a @a StationFtor for each station to target, in reverse order
+ * @param v        the train that needs to find a path
+ * @param path_found [out] Whether a path has been found (true) or has been guessed (false)
+ * @param target   [out] the target tile of the reservation, free is set to true if path was reserved
+ * @param ftor     station functor to be executed along the best path in reverse order
+ */
+void YapfTrainStationsToTarget(const Train *v, bool &path_found, struct PBSTileInfo *target,
+	StationFtor& ftor, TileIndex orig, Trackdir orig_dir, const struct Order &current_order);
+
+
 #endif /* YAPF_H */

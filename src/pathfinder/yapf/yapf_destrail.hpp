@@ -12,15 +12,24 @@
 #ifndef YAPF_DESTRAIL_HPP
 #define YAPF_DESTRAIL_HPP
 
+#include "../../train.h"
+#include "../../pbs.h"
+
 class CYapfDestinationRailBase {
 protected:
 	RailTypes m_compatible_railtypes;
 
 public:
+	void SetDestination(RailTypeByte railtype, RailTypes compatible_railtypes,
+		bool override_rail_type = false)
+	{
+		m_compatible_railtypes = compatible_railtypes;
+		if (override_rail_type) m_compatible_railtypes |= GetRailTypeInfo(railtype)->compatible_railtypes;
+	}
+
 	void SetDestination(const Train *v, bool override_rail_type = false)
 	{
-		m_compatible_railtypes = v->compatible_railtypes;
-		if (override_rail_type) m_compatible_railtypes |= GetRailTypeInfo(v->railtype)->compatible_railtypes;
+		SetDestination(v->railtype, v->compatible_railtypes, override_rail_type);
 	}
 
 	bool IsCompatibleRailType(RailType rt)
@@ -128,11 +137,12 @@ protected:
 	}
 
 public:
-	void SetDestination(const Train *v)
+	void SetDestination(const Order& current_order, const TileIndex& cur_tile, const TileIndex& dest_tile,
+		RailTypeByte railtype, RailTypes compatible_railtypes)
 	{
-		switch (v->current_order.GetType()) {
+		switch (current_order.GetType()) {
 			case OT_GOTO_WAYPOINT:
-				if (!Waypoint::Get(v->current_order.GetDestination())->IsSingleTile()) {
+				if (!Waypoint::Get(current_order.GetDestination())->IsSingleTile()) {
 					/* In case of 'complex' waypoints we need to do a look
 					 * ahead. This look ahead messes a bit about, which
 					 * means that it 'corrupts' the cache. To prevent this
@@ -142,18 +152,26 @@ public:
 				}
 				/* FALL THROUGH */
 			case OT_GOTO_STATION:
-				m_destTile = CalcClosestStationTile(v->current_order.GetDestination(), v->tile, v->current_order.IsType(OT_GOTO_STATION) ? STATION_RAIL : STATION_WAYPOINT);
-				m_dest_station_id = v->current_order.GetDestination();
+				m_destTile = CalcClosestStationTile(current_order.GetDestination(), cur_tile, current_order.IsType(OT_GOTO_STATION) ? STATION_RAIL : STATION_WAYPOINT);
+				m_dest_station_id = current_order.GetDestination();
 				m_destTrackdirs = INVALID_TRACKDIR_BIT;
+				fprintf(stderr, "SETDEST: %d, %d\n", TileX(m_destTile), TileY(m_destTile));
+
 				break;
 
 			default:
-				m_destTile = v->dest_tile;
+				m_destTile = dest_tile;
 				m_dest_station_id = INVALID_STATION;
-				m_destTrackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(v->dest_tile, TRANSPORT_RAIL, 0));
+				m_destTrackdirs = TrackStatusToTrackdirBits(GetTileTrackStatus(dest_tile, TRANSPORT_RAIL, 0));
 				break;
 		}
-		CYapfDestinationRailBase::SetDestination(v);
+		CYapfDestinationRailBase::SetDestination(railtype, compatible_railtypes);
+	}
+
+	void SetDestination(const Train* v)
+	{
+		SetDestination(v->current_order, v->tile, v->dest_tile, v->railtype,
+			v->compatible_railtypes);
 	}
 
 	/** Called by YAPF to detect if node ends in the desired destination */
