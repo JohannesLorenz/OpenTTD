@@ -129,5 +129,4 @@ void YapfTrainStationsToTarget(const Train *v, bool &path_found, struct PBSTileI
 	StationFtor& ftor, TileIndex orig, Trackdir orig_dir, const struct Order &current_order,
 	int best_cost, bool try_reverse = true);
 
-
 #endif /* YAPF_H */
