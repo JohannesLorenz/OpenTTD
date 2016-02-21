@@ -2,9 +2,15 @@
 #define GRAPH_V_H
 
 #include "null_v.h"
+#include <vector>
 
 class VideoDriver_Graph : public VideoDriver_Null
 {
+	void SaveOrderList(struct railnet_file_info& file, const struct OrderList* _ol,
+		std::vector<bool> &stations_used) const;
+	void SaveStation(struct railnet_file_info& file, const struct Station* st,
+		const std::vector<bool> &stations_used) const;
+	void SaveCargoSpec(struct railnet_file_info& file, const struct CargoSpec* carg) const;
 public:
 	VideoDriver_Graph();
 	/* virtual */ void MainLoop();

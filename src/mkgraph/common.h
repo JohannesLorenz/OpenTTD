@@ -5,6 +5,7 @@
 #include <vector>
 #include <set>
 #include <iosfwd>
+#include <limits>
 
 #ifdef EXPORTER
 #include <cstdint>
@@ -27,7 +28,8 @@ struct order_list
 	std::set<CargoID> cargo; // cargo order and amount does not matter
 	std::vector<StationID> stations;
 	bool operator<(const order_list& other) const;
-	order_list() : is_cycle(false), is_bicycle(false)
+	order_list() : is_cycle(false), is_bicycle(false),
+		min_station(std::numeric_limits<StationID>::max())
 	{
 	}
 };
