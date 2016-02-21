@@ -18,6 +18,7 @@
 #include "yapf_destrail.hpp"
 #include "../../viewport_func.h"
 #include "../../newgrf_station.h"
+#include "../../depot_base.h"
 
 #include "../../safeguards.h"
 
@@ -464,6 +465,125 @@ public:
 		return next_trackdir;
 	}
 
+	static void stStationsToTarget(const Train *v, bool &path_found, PBSTileInfo *target,
+		StationFtor& ftor, TileIndex orig, Trackdir orig_dir,
+		const Order& current_order)
+	{
+		Tpf pf1;
+		pf1.StationsToTarget(v, path_found, target, ftor, orig, orig_dir, current_order);
+	}
+
+	struct all_tiles_t
+	{
+		StationFtor& ftor;
+
+		bool func(TileIndex tile, Trackdir tdir)
+		{
+			if(GetTileType(tile) == MP_STATION /*&& IsRailWaypoint(cur.tile)*/)
+			{
+				ftor(tile, tdir);
+			}
+			return true;
+		}
+	};
+
+
+	inline void StationsToTarget(const Train *v, bool &path_found, PBSTileInfo *target,
+		StationFtor& ftor, TileIndex orig, Trackdir orig_dir,
+		const Order& current_order)
+	{
+		if (target != NULL) target->tile = INVALID_TILE;
+
+		/* set origin and destination nodes */
+		if(orig == INVALID_TILE) {
+			PBSTileInfo origin = FollowTrainReservation(v);
+			orig = origin.tile;
+			orig_dir = origin.trackdir;
+			fprintf(stderr, "SET ORIGIN FROM TRAIN: %d, %d", TileX(orig), TileY(orig));
+		}
+		else
+		 fprintf(stderr, "SET ORIGIN: %d, %d", TileX(orig), TileY(orig));
+
+		Yapf().SetOrigin(orig, orig_dir, INVALID_TILE, INVALID_TRACKDIR, 1, true);
+
+		TileIndex dest_tile = INVALID_TILE;
+		if(current_order.GetType() != OT_GOTO_STATION && current_order.GetType() != OT_GOTO_WAYPOINT)
+		{
+			if(current_order.GetType() == OT_GOTO_DEPOT)
+			{
+				DepotID id = current_order.GetDestination();
+				dest_tile = Depot::Get(id)->xy;
+			}
+			else
+			 return;
+		}
+
+		Yapf().SetDestination(current_order, v->tile, INVALID_TILE,
+			v->railtype, v->compatible_railtypes);
+
+		/* find the best path */
+		path_found = Yapf().FindPath(v);
+
+		Node *pNode = Yapf().GetBestNode();
+		if (pNode != NULL) {
+
+			/* path was found or at least suggested
+			 * walk through the path back to the origin */
+			Node *pPrev = NULL;
+			while (pNode->m_parent != NULL) {
+
+				struct TILE {
+					TileIndex   tile;
+					Trackdir    td;
+					TileType    tile_type;
+					RailType    rail_type;
+
+					TILE()
+					{
+						tile = INVALID_TILE;
+						td = INVALID_TRACKDIR;
+						tile_type = MP_VOID;
+						rail_type = INVALID_RAILTYPE;
+					}
+
+					TILE(TileIndex tile, Trackdir td)
+					{
+						this->tile = tile;
+						this->td = td;
+						this->tile_type = GetTileType(tile);
+						this->rail_type = GetTileRailType(tile);
+					}
+
+					TILE(const TILE &src)
+					{
+						tile = src.tile;
+						td = src.td;
+						tile_type = src.tile_type;
+						rail_type = src.rail_type;
+					}
+				}; // TODO: not needed
+
+				all_tiles_t all_tiles = { ftor };
+
+				pNode->IterateTiles(v, Yapf(), *this, all_tiles, &all_tiles_t::func);
+
+				TILE cur(pNode->m_key.m_tile, pNode->m_key.m_td);
+
+				fprintf(stderr, "tile: %d, %d\n", TileX(cur.tile), TileY(cur.tile));
+
+				if(cur.tile_type == MP_STATION /*&& IsRailWaypoint(cur.tile)*/)
+				{
+					ftor(cur.tile, cur.td);
+				}
+
+				pPrev = pNode;
+				pNode = pNode->m_parent;
+			}
+
+		}
+
+	}
+
 	static bool stCheckReverseTrain(const Train *v, TileIndex t1, Trackdir td1, TileIndex t2, Trackdir td2, int reverse_penalty)
 	{
 		Tpf pf1;
@@ -643,6 +763,21 @@ bool YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, b
 	}
 
 	return pfnFindNearestSafeTile(v, tile, td, override_railtype);
+}
+
+void YapfTrainStationsToTarget(const Train *v, bool &path_found, PBSTileInfo *target, StationFtor& ftor,
+	TileIndex orig, Trackdir orig_dir, const Order& current_order)
+{
+	typedef void (*PfnStationsToTarget)(const Train*, bool&, PBSTileInfo*, StationFtor&,
+		TileIndex, Trackdir, const Order&);
+	PfnStationsToTarget pfnStationsToTarget = &CYapfRail1::stStationsToTarget;
+
+	/* check if non-default YAPF type needed */
+	if (_settings_game.pf.forbid_90_deg) {
+		pfnStationsToTarget = &CYapfRail2::stStationsToTarget;
+	}
+
+	pfnStationsToTarget(v, path_found, target, ftor, orig, orig_dir, current_order);
 }
 
 /** if any track changes, this counter is incremented - that will invalidate segment cost cache */
