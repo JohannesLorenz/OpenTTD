@@ -467,30 +467,35 @@ public:
 
 	static void stStationsToTarget(const Train *v, bool &path_found, PBSTileInfo *target,
 		StationFtor& ftor, TileIndex orig, Trackdir orig_dir,
-		const Order& current_order)
+		const Order& current_order, int best_cost)
 	{
 		Tpf pf1;
-		pf1.StationsToTarget(v, path_found, target, ftor, orig, orig_dir, current_order);
+		pf1.StationsToTarget(v, path_found, target, ftor,
+			orig, orig_dir, current_order, best_cost);
 	}
 
 	struct all_tiles_t
 	{
 		StationFtor& ftor;
+		int cost;
+		bool executed;
 
 		bool func(TileIndex tile, Trackdir tdir)
 		{
-			if(GetTileType(tile) == MP_STATION /*&& IsRailWaypoint(cur.tile)*/)
+			if(!executed && GetTileType(tile) == MP_STATION /*&& IsRailWaypoint(cur.tile)*/)
 			{
-				ftor(tile, tdir);
+				ftor(tile, tdir, cost);
+				executed = true;
+				return false;
 			}
-			return true;
+			else return true;
 		}
 	};
 
 
 	inline void StationsToTarget(const Train *v, bool &path_found, PBSTileInfo *target,
 		StationFtor& ftor, TileIndex orig, Trackdir orig_dir,
-		const Order& current_order)
+		const Order& current_order, int best_cost)
 	{
 		if (target != NULL) target->tile = INVALID_TILE;
 
@@ -525,57 +530,26 @@ public:
 		path_found = Yapf().FindPath(v);
 
 		Node *pNode = Yapf().GetBestNode();
-		if (pNode != NULL) {
+		if (path_found && pNode != NULL && pNode->m_cost < best_cost) {
 
 			/* path was found or at least suggested
 			 * walk through the path back to the origin */
 			Node *pPrev = NULL;
 			while (pNode->m_parent != NULL) {
 
-				struct TILE {
-					TileIndex   tile;
-					Trackdir    td;
-					TileType    tile_type;
-					RailType    rail_type;
+				all_tiles_t all_tiles = { ftor, pNode->m_cost, false };
 
-					TILE()
-					{
-						tile = INVALID_TILE;
-						td = INVALID_TRACKDIR;
-						tile_type = MP_VOID;
-						rail_type = INVALID_RAILTYPE;
-					}
-
-					TILE(TileIndex tile, Trackdir td)
-					{
-						this->tile = tile;
-						this->td = td;
-						this->tile_type = GetTileType(tile);
-						this->rail_type = GetTileRailType(tile);
-					}
-
-					TILE(const TILE &src)
-					{
-						tile = src.tile;
-						td = src.td;
-						tile_type = src.tile_type;
-						rail_type = src.rail_type;
-					}
-				}; // TODO: not needed
-
-				all_tiles_t all_tiles = { ftor };
-
+				// TODO: this is not completely valid...
 				pNode->IterateTiles(v, Yapf(), *this, all_tiles, &all_tiles_t::func);
 
-				TILE cur(pNode->m_key.m_tile, pNode->m_key.m_td);
-
+#if 0
 				fprintf(stderr, "tile: %d, %d\n", TileX(cur.tile), TileY(cur.tile));
 
 				if(cur.tile_type == MP_STATION /*&& IsRailWaypoint(cur.tile)*/)
 				{
-					ftor(cur.tile, cur.td);
+					ftor(cur.tile, cur.td, pNode->m_cost);
 				}
-
+#endif
 				pPrev = pNode;
 				pNode = pNode->m_parent;
 			}
@@ -766,10 +740,10 @@ bool YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, b
 }
 
 void YapfTrainStationsToTarget(const Train *v, bool &path_found, PBSTileInfo *target, StationFtor& ftor,
-	TileIndex orig, Trackdir orig_dir, const Order& current_order)
+	TileIndex orig, Trackdir orig_dir, const Order& current_order, int best_cost)
 {
 	typedef void (*PfnStationsToTarget)(const Train*, bool&, PBSTileInfo*, StationFtor&,
-		TileIndex, Trackdir, const Order&);
+		TileIndex, Trackdir, const Order&, int);
 	PfnStationsToTarget pfnStationsToTarget = &CYapfRail1::stStationsToTarget;
 
 	/* check if non-default YAPF type needed */
@@ -777,7 +751,7 @@ void YapfTrainStationsToTarget(const Train *v, bool &path_found, PBSTileInfo *ta
 		pfnStationsToTarget = &CYapfRail2::stStationsToTarget;
 	}
 
-	pfnStationsToTarget(v, path_found, target, ftor, orig, orig_dir, current_order);
+	pfnStationsToTarget(v, path_found, target, ftor, orig, orig_dir, current_order, best_cost);
 }
 
 /** if any track changes, this counter is incremented - that will invalidate segment cost cache */
