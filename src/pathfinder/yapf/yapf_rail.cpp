@@ -560,6 +560,13 @@ public:
 		/* find the best path */
 		path_found = Yapf().FindPath(v);
 
+		if(!path_found)
+		{
+			Yapf().SetOrigin(orig, ReverseTrackdir(orig_dir),
+				INVALID_TILE, INVALID_TRACKDIR, 1, true);
+			path_found = Yapf().FindPath(v);
+		}
+
 		Node *pNode = Yapf().GetBestNode();
 		if (path_found && pNode != NULL && pNode->m_cost < best_cost) {
 
