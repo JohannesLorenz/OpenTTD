@@ -71,26 +71,29 @@ struct st_node_t
 	Trackdir dir;
 };
 
-struct visited_path_t
+class visited_path_t
 {
-	typedef std::map<StationID, st_node_t> path_t;
+	//! this struct contains pointers, better don't copy it
+	visited_path_t(const visited_path_t& ) {}
+public:
+	typedef std::map<std::pair<TileIndex, Trackdir>, st_node_t> path_t;
 	path_t path;
-	StationID first, target;
-	visited_path_t() : target(INVALID_STATION) {}
+	st_node_t *first, *target;
+	visited_path_t() : target(NULL) {}
 };
 
 template<class Ftor>
 void for_all_stations_to(visited_path_t& visited, Ftor& ftor)
 {
 	std::size_t max = visited.path.size() << 1;
-	StationID from = visited.first;
-	for(; from != visited.target; from = visited.path[from].child->sid)
+	st_node_t* from = visited.first;
+	for(; from != visited.target; from = from->child)
 	{
 		static char buf[256];
-		SetDParam(0, from); GetString(buf, STR_STATION_NAME, lastof(buf));
+		SetDParam(0, from->sid); GetString(buf, STR_STATION_NAME, lastof(buf));
 		std::cerr << " for_all: " << buf << ", tiles:" << std::endl;
 
-		ftor(visited.path[from]);
+		ftor(*from);
 		if(!--max)
 		 throw "Cycle detected.";
 	}
@@ -102,10 +105,14 @@ bool _ForAllStationsTo(Train* train, location_data location, const Order& order,
 class GraphFtor : public StationFtor
 {
 	visited_path_t* visited_path;
-	st_node_t* last_node;
+	static st_node_t* last_node;
 	bool last_station;
 	virtual void OnStationTile(const TileIndex &t, const Trackdir& td, int cost)
 	{
+		if(last_station)
+		 last_node = NULL;
+
+
 		Station* station = Station::GetByTile(t);
 		// if it's a station, and not the same one as last time
 		if(station && (!last_node || last_node->sid != station->index))
@@ -115,13 +122,16 @@ class GraphFtor : public StationFtor
 			//location_data opp = loc;
 			//opp.dir = ReverseTrackdir(opp.dir);
 
-			st_node_t& st_node = visited_path->path[sid];
+			st_node_t& st_node = visited_path->path[std::make_pair(t, td)];
 			if(last_station)
 			{
+#if 0
 				loc.tile = t;
 				loc.dir = td;
 				loc.cost = cost;
-				visited_path->target = sid;
+#endif
+				max_cost = cost;
+				visited_path->target = &st_node;
 				std::cerr << "RECOMPUTED PATH" << std::endl;
 				std::cerr << "tile/trackdir/cost: " << t << ", " << td << ", " << cost << std::endl;
 			}
@@ -129,7 +139,7 @@ class GraphFtor : public StationFtor
 			{
 				// assume that this is the best path
 				// if this will overwritten in the future: no problem
-				visited_path->path[sid].child = last_node;
+				st_node.child = last_node;
 			}
 
 			st_node.sid = sid;
@@ -140,9 +150,9 @@ class GraphFtor : public StationFtor
 
 			// denote our station as the first station
 			// can be overwritten by subsequent calls
-			visited_path->first = sid;
+			visited_path->first = &st_node;
 
-			last_node = &visited_path->path[sid];
+			last_node = &st_node;
 
 			static char buf[256];
 
@@ -153,34 +163,37 @@ class GraphFtor : public StationFtor
 			fprintf(stderr, "    %d, %d\n", TileX(t), TileY(t));
 
 			// try from this station into the reverse direction
-
-			if(cost <= 0) {
-			// can't get any better :)
-			// actually, yapf allows "negative pentalties" for the starting tile
-			// so, we must disallow loops
+			if(last_station || cost <= 0) {
+				// yapf allows "negative pentalties" for the starting tile
+				// so, we must disallow loops
+			}
+			else {
 				_ForAllStationsTo(train, cur_st_loc, order,
-				visited_path, loc.cost - cost);
+					visited_path, max_cost - cost);
 			}
 
 			std::cerr << " <- GraphFtor: " << buf << std::endl;
 
 		//	(*ftor)(t, td);
+
+			last_station = false;
 		}
-
-		last_station = false;
-
 	}
 public:
-	location_data loc; //!< where + how the target is being reached
+//	location_data loc; //!< where + how the target is being reached
+	int max_cost;
 	Train* train;
 	const Order& order;
 	GraphFtor(visited_path_t* v, Train* train, const Order& order) :
 		visited_path(v),
-		last_node(NULL),
+	//	last_node(NULL),
 		last_station(true),
+		max_cost(0),
 		train(train),
 		order(order) {}
 };
+
+st_node_t* GraphFtor::last_node = NULL;
 
 bool _ForAllStationsTo(Train* train, location_data location, const Order& order,
 	visited_path_t* visited_path, int best_cost)
@@ -193,7 +206,7 @@ bool _ForAllStationsTo(Train* train, location_data location, const Order& order,
 	YapfTrainStationsToTarget(train, path_found, &target, graphf,
 		location.tile, location.dir, order, best_cost);
 
-	location = graphf.loc;
+	//location = graphf.loc;
 
 	return path_found;
 }
@@ -324,9 +337,9 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, const OrderList* 
 			path_found = ForAllStationsTo(train, location_data(INVALID_TILE, INVALID_TRACKDIR),
 					*first_order, &visited_path);
 			for_all_stations_to(visited_path, dump_station);
-			std::cerr << "recent target: " << visited_path.target << std::endl;
-			recent_tile = visited_path.path[visited_path.target].tile;
-			recent_trackdir = visited_path.path[visited_path.target].dir;
+			std::cerr << "recent target: " << visited_path.target->sid << std::endl;
+			recent_tile = visited_path.target->tile;
+			recent_trackdir = visited_path.target->dir;
 			std::cerr << "recent tile: " << TileX(recent_tile) << ", " << TileY(recent_tile) << std::endl;
 			std::cerr << "recent trackdir: " << recent_trackdir << std::endl;
 			std::cerr << "path found? " << path_found << std::endl;
@@ -343,8 +356,8 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, const OrderList* 
 					&visited_path);
 				for_all_stations_to(visited_path, dump_station);
 				std::cerr << "path found? " << path_found << std::endl;
-				recent_tile = visited_path.path[visited_path.target].tile;
-				recent_trackdir = visited_path.path[visited_path.target].dir;
+				recent_tile = visited_path.target->tile;
+				recent_trackdir = visited_path.target->dir;
 			}
 			}
 #endif
@@ -369,8 +382,8 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, const OrderList* 
 					path_found = ForAllStationsTo(train, location_data(recent_tile, recent_trackdir),
 						*order, &visited_path);
 					for_all_stations_to(visited_path, dump_station);
-					recent_tile = visited_path.path[visited_path.target].tile;
-					recent_trackdir = visited_path.path[visited_path.target].dir;
+					recent_tile = visited_path.target->tile;
+					recent_trackdir = visited_path.target->dir;
 					std::cerr << "path found? " << path_found << std::endl;
 
 #endif
