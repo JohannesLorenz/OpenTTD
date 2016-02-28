@@ -51,19 +51,12 @@ struct location_data
 {
 	TileIndex tile;
 	Trackdir dir;
-	int cost;
-	location_data() : tile(INVALID_TILE), cost(0) {}
+	location_data() : tile(INVALID_TILE) {}
 	location_data(TileIndex tile, Trackdir dir) :
-		tile(tile), dir(dir), cost(0) {}
-	static int max_cost() {
-		return std::numeric_limits<int>::max();
-	}
+		tile(tile), dir(dir) {}
 };
 
-//typedef std::set< std::pair<bool, int> > already_t;
-
-
-struct st_node_t
+struct st_node_t : public location_data
 {
 	st_node_t* child;
 	StationID sid;
@@ -99,7 +92,7 @@ void for_all_stations_to(visited_path_t& visited, Ftor& ftor)
 	}
 }
 
-bool _ForAllStationsTo(Train* train, location_data location, const Order& order,
+bool _ForAllStationsTo(const Train *train, location_data location, const Order& order,
 	visited_path_t* visited_path, int best_cost = std::numeric_limits<int>::max());
 
 class GraphFtor : public StationFtor
@@ -112,15 +105,11 @@ class GraphFtor : public StationFtor
 		if(last_station)
 		 last_node = NULL;
 
-
 		Station* station = Station::GetByTile(t);
 		// if it's a station, and not the same one as last time
 		if(station && (!last_node || last_node->sid != station->index))
 		{
 			StationID sid = station->index;
-
-			//location_data opp = loc;
-			//opp.dir = ReverseTrackdir(opp.dir);
 
 			st_node_t& st_node = visited_path->path[std::make_pair(t, td)];
 			if(last_station)
@@ -174,19 +163,16 @@ class GraphFtor : public StationFtor
 
 			std::cerr << " <- GraphFtor: " << buf << std::endl;
 
-		//	(*ftor)(t, td);
-
 			last_station = false;
 		}
 	}
 public:
 //	location_data loc; //!< where + how the target is being reached
-	int max_cost;
-	Train* train;
+	int max_cost; // TODO: no class variable
+	const Train* train;
 	const Order& order;
-	GraphFtor(visited_path_t* v, Train* train, const Order& order) :
+	GraphFtor(visited_path_t* v, const Train* train, const Order& order) :
 		visited_path(v),
-	//	last_node(NULL),
 		last_station(true),
 		max_cost(0),
 		train(train),
@@ -195,7 +181,7 @@ public:
 
 st_node_t* GraphFtor::last_node = NULL;
 
-bool _ForAllStationsTo(Train* train, location_data location, const Order& order,
+bool _ForAllStationsTo(const Train* train, location_data location, const Order& order,
 	visited_path_t* visited_path, int best_cost)
 {
 	bool path_found;
@@ -206,18 +192,16 @@ bool _ForAllStationsTo(Train* train, location_data location, const Order& order,
 	YapfTrainStationsToTarget(train, path_found, &target, graphf,
 		location.tile, location.dir, order, best_cost);
 
-	//location = graphf.loc;
-
 	return path_found;
 }
 
-bool ForAllStationsTo(Train* train, location_data location, const Order& order,
+bool ForAllStationsTo(const Train* train, location_data location, const Order& order,
 	visited_path_t* visited_path, int best_cost = std::numeric_limits<int>::max())
 {
 	if(!_ForAllStationsTo(train, location, order, visited_path, best_cost))
 	{
 		// we only reverse on GraphFtor::OnStationTile, so if
-		// this function never gets reached, we have to try reversing
+		// GraphFtor::OnStationTile never gets reached, we have to try reversing
 		// at the starting position
 		location_data& opp = location;
 		opp.dir = ReverseTrackdir(opp.dir);
@@ -282,7 +266,7 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, const OrderList* 
 #endif
 	std::set<const OrderList*> order_lists_done;
 
-	Train* train;
+	const Train* train;
 	FOR_ALL_TRAINS(train) {
 
 		bool path_found;
@@ -313,62 +297,44 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, const OrderList* 
 			if(!first_order) // no real stations found
 			 continue; // => nothing to draw
 
-			Station* first_station = Station::Get((StationID)first_order->GetDestination());
-#define CALL_YAPF
-#ifdef CALL_YAPF
 			// how did the train enter the recently passed (e.g. current) station?
-			TileIndex recent_tile;
-			Trackdir recent_trackdir;
+			location_data recent_loc;
 
 			// virtually drive once around to get the right track direction
 			{
 
-			/*class DoNothing : public StationFtor
-			{
-				virtual void OnStationTile(const TileIndex &) {}
-			} do_nothing;*/
-
-			SetDParam(0, (StationID)first_order->GetDestination()); GetString(buf, STR_STATION_NAME, lastof(buf));
-			std::cerr << "Pre-Heading for station: " << buf << std::endl;
-
-			/*YapfTrainStationsToTarget(train, path_found, &target, do_nothing,
-					INVALID_TILE, INVALID_TRACKDIR, *first_order, 0);*/
-			visited_path_t visited_path;
-			path_found = ForAllStationsTo(train, location_data(INVALID_TILE, INVALID_TRACKDIR),
-					*first_order, &visited_path);
-			for_all_stations_to(visited_path, dump_station);
-			std::cerr << "recent target: " << visited_path.target->sid << std::endl;
-			recent_tile = visited_path.target->tile;
-			recent_trackdir = visited_path.target->dir;
-			std::cerr << "recent tile: " << TileX(recent_tile) << ", " << TileY(recent_tile) << std::endl;
-			std::cerr << "recent trackdir: " << recent_trackdir << std::endl;
-			std::cerr << "path found? " << path_found << std::endl;
-
-			for (Order *order = first_order->next; order != NULL; order = order->next)
-			if (order->IsType(OT_GOTO_STATION))
-			{
-				StationID sid = (StationID)order->GetDestination();
-				SetDParam(0, sid); GetString(buf, STR_STATION_NAME, lastof(buf));
+				SetDParam(0, (StationID)first_order->GetDestination()); GetString(buf, STR_STATION_NAME, lastof(buf));
 				std::cerr << "Pre-Heading for station: " << buf << std::endl;
-				//YapfTrainStationsToTarget(train, path_found, &target, do_nothing,
-				//	recent_tile, recent_trackdir, *order, 0);
-				path_found = ForAllStationsTo(train, location_data(recent_tile, recent_trackdir), *order,
-					&visited_path);
+
+				visited_path_t visited_path;
+				path_found = ForAllStationsTo(train, location_data(INVALID_TILE, INVALID_TRACKDIR),
+						*first_order, &visited_path);
 				for_all_stations_to(visited_path, dump_station);
+				std::cerr << "recent target: " << visited_path.target->sid << std::endl;
+				recent_loc = *visited_path.target;
 				std::cerr << "path found? " << path_found << std::endl;
-				recent_tile = visited_path.target->tile;
-				recent_trackdir = visited_path.target->dir;
+
+				for (Order *order = first_order->next; order != NULL; order = order->next)
+				if (order->IsType(OT_GOTO_STATION))
+				{
+					StationID sid = (StationID)order->GetDestination();
+					SetDParam(0, sid); GetString(buf, STR_STATION_NAME, lastof(buf));
+					std::cerr << "Pre-Heading for station: " << buf << std::endl;
+
+					path_found = ForAllStationsTo(train, recent_loc, *order,
+						&visited_path);
+					for_all_stations_to(visited_path, dump_station);
+					std::cerr << "path found? " << path_found << std::endl;
+					recent_loc = *visited_path.target;
+				}
 			}
-			}
-#endif
+
 
 			// drive around once again and note the stations
 			visited_path_t visited_path;
 			for (Order *order = _ol->GetFirstOrder(); order != NULL; order = order->next)
 			{
 
-
-				PBSTileInfo target;
 				if (order->IsType(OT_GOTO_STATION)
 /*					|| order->IsType(OT_GOTO_WAYPOINT)
 					|| order->IsType(OT_GOTO_DEPOT)*/)
@@ -376,17 +342,13 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, const OrderList* 
 					StationID sid = (StationID)order->GetDestination();
 					SetDParam(0, sid); GetString(buf, STR_STATION_NAME, lastof(buf));
 					std::cerr << "Heading for station: " << buf << std::endl;
-#ifdef CALL_YAPF
-				//	YapfTrainStationsToTarget(train, path_found, &target, dump_station,
-				//		recent_tile, recent_trackdir, *order, 0);
-					path_found = ForAllStationsTo(train, location_data(recent_tile, recent_trackdir),
+
+					path_found = ForAllStationsTo(train, recent_loc,
 						*order, &visited_path);
 					for_all_stations_to(visited_path, dump_station);
-					recent_tile = visited_path.target->tile;
-					recent_trackdir = visited_path.target->dir;
+					recent_loc = *visited_path.target;
 					std::cerr << "path found? " << path_found << std::endl;
 
-#endif
 					ok = ok && path_found;
 				}
 
@@ -395,11 +357,6 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, const OrderList* 
 				if (order->IsType(OT_GOTO_STATION) /*|| order->IsType(OT_IMPLICIT)*/)
 				{
 					StationID sid = (StationID)order->GetDestination();
-
-				/*	while(train->tile)
-					{
-						train->Tick();
-					}*/
 
 					// rewrites A->B->B->C as A->B->C
 					if(new_ol.stations.empty() || sid != new_ol.stations.back())
