@@ -60,8 +60,8 @@ struct st_node_t : public location_data
 {
 	st_node_t* child;
 	StationID sid;
-	TileIndex tile;
-	Trackdir dir;
+//	TileIndex tile;
+//	Trackdir dir;
 };
 
 class visited_path_t
@@ -328,7 +328,7 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 		if(!cur_ol)
 		 return;
 		std::cerr << "NEXT TRAIN: " << train->unitnumber << std::endl;
-		if(train->IsFrontEngine()
+		if(	train->IsFrontEngine()
 			&& cur_ol->GetFirstOrder() != NULL // don't add empty orders
 			&& order_lists_done.find(cur_ol) == order_lists_done.end())
 		{
@@ -356,6 +356,12 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 					if(path_found)
 					{
 						recent_loc = *visited_path.target;
+						std::cerr << "Found: " << recent_loc.tile << " / "
+							<< recent_loc.dir << std::endl;
+						StationID sid2 = (StationID)order->GetDestination();
+						SetDParam(0, sid2); GetString(buf, STR_STATION_NAME, lastof(buf));
+						std::cerr << "Found: " << buf << std::endl;
+
 						first_order = order;
 					}
 				}
@@ -366,13 +372,16 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 
 			// virtually drive once around to get the right track direction
 			{
+				std::cerr << "Still: " << recent_loc.tile
+						<< " / " << recent_loc.dir << std::endl;
 				for (Order *order = first_order->next; order != NULL; order = order->next)
 				if (order->IsType(OT_GOTO_STATION))
 				{
 					StationID sid = (StationID)order->GetDestination();
 					SetDParam(0, sid); GetString(buf, STR_STATION_NAME, lastof(buf));
 					std::cerr << "Pre-Heading for station: " << buf << std::endl;
-
+					std::cerr << "Recent loc: " << recent_loc.tile
+						<< " / " << recent_loc.dir << std::endl;
 					path_found = ForAllStationsTo(train, recent_loc, *order,
 						&visited_path);
 					for_all_stations_to(visited_path, dump_station);
