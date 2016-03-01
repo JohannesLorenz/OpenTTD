@@ -6,7 +6,7 @@
 
 class VideoDriver_Graph : public VideoDriver_Null
 {
-	void SaveOrderList(struct railnet_file_info& file, const struct OrderList* _ol,
+	void SaveOrderList(struct railnet_file_info& file, const Train *train,
 		std::vector<bool> &stations_used) const;
 	void SaveStation(struct railnet_file_info& file, const struct Station* st,
 		const std::vector<bool> &stations_used) const;
