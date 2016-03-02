@@ -14,14 +14,17 @@ typedef uint16_t uint16;
 typedef uint32_t uint32;
 typedef uint16 StationID;
 typedef byte CargoID;
+typedef uint16 UnitID; // TODO: remove or type assertion
 #else
 #include "../station_base.h"
+#include "../transport_type.h"
 #endif
 
 // TODO: namespace for the whole file
 
 struct order_list
 {
+	UnitID unit_number;
 	bool is_cycle;
 	bool is_bicycle; //! at least two trains that drive in opposite cycles
 	StationID min_station;

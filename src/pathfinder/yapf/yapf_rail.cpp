@@ -478,14 +478,22 @@ public:
 	{
 		StationFtor& ftor;
 		int cost;
-		bool executed;
+		bool executed() const { return found_station != INVALID_STATION; }
+		StationID found_station, recent_station;
+
+		all_tiles_t(StationFtor& ftor, int cost, StationID recent_station) : ftor(ftor), cost(cost),
+			found_station(INVALID_STATION),
+			recent_station(recent_station) {}
 
 		bool func(TileIndex tile, Trackdir tdir)
 		{
-			if(!executed && GetTileType(tile) == MP_STATION /*&& IsRailWaypoint(cur.tile)*/)
+			if(!executed() && GetTileType(tile) == MP_STATION /*&& IsRailWaypoint(cur.tile)*/)
 			{
-				ftor(tile, tdir, cost);
-				executed = true;
+				found_station = Station::GetByTile(tile)->index;
+				fprintf(stderr, "RECENT: %d, FOUND: %d\n", (int)recent_station, (int)found_station);
+
+				if(found_station != recent_station)
+				 ftor(tile, tdir, cost);
 				return false;
 			}
 			else return true;
@@ -542,13 +550,15 @@ public:
 			/* path was found or at least suggested
 			 * walk through the path back to the origin */
 			Node *pPrev = NULL;
-			while (pNode->m_parent != NULL) {
+			StationID recent_station = INVALID_STATION;
+			while (pNode != NULL) {
 
-				all_tiles_t all_tiles = { ftor, pNode->m_cost, false };
+				all_tiles_t all_tiles(ftor, pNode->m_cost, recent_station);
 
 				// TODO: this is not completely valid...
 				pNode->IterateTiles(v, Yapf(), *this, all_tiles, &all_tiles_t::func);
-
+				if(all_tiles.found_station != INVALID_STATION)
+				 recent_station = all_tiles.found_station;
 #if 0
 				fprintf(stderr, "tile: %d, %d\n", TileX(cur.tile), TileY(cur.tile));
 

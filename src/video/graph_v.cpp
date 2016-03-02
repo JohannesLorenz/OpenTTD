@@ -80,7 +80,8 @@ void for_all_stations_to(visited_path_t& visited, Ftor& ftor)
 {
 	std::size_t max = visited.path.size() << 1;
 	st_node_t* from = visited.first;
-	for(; from != visited.target; from = from->child)
+	bool go_on = true;
+	for(; go_on; from = from->child)
 	{
 		static char buf[256];
 		SetDParam(0, from->sid); GetString(buf, STR_STATION_NAME, lastof(buf));
@@ -89,6 +90,8 @@ void for_all_stations_to(visited_path_t& visited, Ftor& ftor)
 		ftor(*from);
 		if(!--max)
 		 throw "Cycle detected.";
+
+		go_on = (from != visited.target);
 	}
 }
 
@@ -152,13 +155,14 @@ class GraphFtor : public StationFtor
 			fprintf(stderr, "    %d, %d\n", TileX(t), TileY(t));
 
 			// try from this station into the reverse direction
-			if(last_station || cost <= 0) {
+			if(last_station /*|| cost <= 0*/) {
+				std::cerr << "->NOCOMP: " << cost << std::endl;
 				// yapf allows "negative pentalties" for the starting tile
 				// so, we must disallow loops
 			}
 			else {
 				_ForAllStationsTo(train, cur_st_loc, order,
-					visited_path, max_cost - cost);
+					visited_path, max_cost - std::max(cost, 0));
 			}
 
 			std::cerr << " <- GraphFtor: " << buf << std::endl;
@@ -255,7 +259,7 @@ struct AddStation : DumpStation
 	{
 		DumpStation::operator ()(node);
 
-		if(&node == vp.target)
+	/*	if(&node == vp.target)
 		switch(nst)
 		{
 			case ONSF_STOP_EVERYWHERE:
@@ -270,7 +274,8 @@ struct AddStation : DumpStation
 			case ONSF_NO_STOP_AT_DESTINATION_STATION:
 				add_node(node);
 			default: break;
-		}
+		}*/
+		add_node(node);
 	}
 
 	AddStation(OrderNonStopFlags nst, const visited_path_t& vp,
@@ -347,12 +352,13 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 			{
 				if (order->IsType(OT_GOTO_STATION) /*|| order->IsType(OT_IMPLICIT)*/)
 				{
-					path_found = ForAllStationsTo(train, location_data(),
-						*order, &visited_path);
 
 					StationID sid = (StationID)order->GetDestination();
 					SetDParam(0, sid); GetString(buf, STR_STATION_NAME, lastof(buf));
 					std::cerr << "Pre-Heading (trying) for station: " << buf << std::endl;
+
+					path_found = ForAllStationsTo(train, location_data(),
+						*order, &visited_path);
 					if(path_found)
 					{
 						recent_loc = *visited_path.target;
@@ -552,6 +558,8 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 		// you could have a train running A->B->C->D->A->D->C->B,
 		// however, passengers wanting to go C->B might get
 		// confused that their train turns around
+
+		new_ol.unit_number = train->unitnumber;
 
 		file.order_lists.insert(new_ol);
 	}
