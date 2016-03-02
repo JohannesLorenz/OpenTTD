@@ -33,13 +33,11 @@ int main(int argc, char** argv)
 	float value = 0.0f, hue = 0.0f;
 	std::cout.precision(3);
 
-	std::size_t idx = 0;
-
 	std::set<CargoID> used_cargo_ids = { 0 };
 
 	// TODO: const_iterator and container that visits begin() before end()
 	for(std::multiset<order_list>::iterator itr = file.order_lists.begin();
-		itr != file.order_lists.end(); ++itr, ++idx)
+		itr != file.order_lists.end(); ++itr)
 	{
 		{
 			bool cargo_found = false;
@@ -52,7 +50,7 @@ int main(int argc, char** argv)
 			for(std::set<CargoID>::const_iterator itr2 = itr->cargo.begin();
 				!cargo_found && itr2 != itr->cargo.end(); ++itr2)
 			 cargo_found = (used_cargo_ids.find(*itr2) != used_cargo_ids.end());
-			std::cerr << "order: " << idx << std::endl;
+			std::cerr << "order: " << itr->unit_number << std::endl;
 			if(!cargo_found)
 			 std::cerr << "not found" << std::endl;
 			if(!cargo_found)
@@ -95,12 +93,12 @@ int main(int argc, char** argv)
 			// make printing easier:
 			ol.stations.push_back(ol.stations.front());
 
-			std::cout << "\t// order " << idx << " ("
+			std::cout << "\t// order " << itr->unit_number << " ("
 				<< file.stations[ol.stations[0]].name << " - "
 				<< file.stations[ol.stations[mid]].name
 				<< ")" << std::endl;
 
-			std::cout << "\t//cargo: ";
+			std::cout << "\t// cargo: ";
 			for(std::set<CargoID>::const_iterator itr2 = itr->cargo.begin();
 				itr2 != itr->cargo.end(); ++itr2)
 					std::cout << " " << +*itr2;
@@ -109,7 +107,10 @@ int main(int argc, char** argv)
 			std::cout << "\t//";
 			for(std::vector<StationID>::const_iterator itr = ol.stations.begin();
 				itr != ol.stations.end(); ++itr)
-			std::cout << " " << *itr;
+			{
+				std::cout << " " << file.stations[*itr].name;
+			}
+			//std::cout << " " << *itr;
 			std::cout << std::endl;
 
 			auto print_end = [&](bool double_edge)
