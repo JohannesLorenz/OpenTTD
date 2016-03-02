@@ -27,6 +27,7 @@ bool order_list::operator<(const order_list &other) const
 
 void serialize(const order_list &ol, std::ostream &o)
 {
+	serialize(ol.unit_number, o);
 	serialize(ol.is_cycle, o);
 	serialize(ol.is_bicycle, o);
 	serialize(ol.min_station, o);
@@ -36,6 +37,7 @@ void serialize(const order_list &ol, std::ostream &o)
 
 void deserialize(order_list &ol, std::istream &i)
 {
+	deserialize(ol.unit_number, i);
 	deserialize(ol.is_cycle, i);
 	deserialize(ol.is_bicycle, i);
 	deserialize(ol.min_station, i);
