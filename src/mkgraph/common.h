@@ -1,3 +1,10 @@
+/*
+ * This file is part of OpenTTD.
+ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
+ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #ifndef COMMON_H
 #define COMMON_H
 
@@ -29,7 +36,7 @@ struct order_list
 	bool is_bicycle; //! at least two trains that drive in opposite cycles
 	StationID min_station;
 	std::set<CargoID> cargo; // cargo order and amount does not matter
-	std::vector<StationID> stations;
+	std::vector<std::pair<StationID, bool> > stations;
 	bool operator<(const order_list& other) const;
 	order_list() : is_cycle(false), is_bicycle(false),
 		min_station(std::numeric_limits<StationID>::max())
@@ -40,8 +47,7 @@ struct order_list
 struct station_info
 {
 	std::string name;
-	uint x;
-	uint y;
+	float x, y;
 };
 
 struct railnet_file_info
@@ -76,12 +82,14 @@ inline void serialize(const uint16& i, std::ostream& o) { wrt(i, o); }
 inline void serialize(const uint32& i, std::ostream& o) { wrt(i, o); }
 inline void serialize(const bool& b, std::ostream& o) { wrt(b, o); }
 inline void serialize(const char& c, std::ostream& o) { wrt(c, o); }
+inline void serialize(const float& f, std::ostream& o) { wrt(f, o); }
 
 inline void deserialize(byte& b, std::istream& i) { rd(b, i); }
 inline void deserialize(uint16& i, std::istream& is) { rd(i, is); }
 inline void deserialize(uint32& i, std::istream& is) { rd(i, is); }
 inline void deserialize(bool& b, std::istream& i) { rd(b, i); }
 inline void deserialize(char& c, std::istream& i) { rd(c, i); }
+inline void deserialize(float& f, std::istream& i) { rd(f, i); }
 
 /*
 	IO containers/structs:

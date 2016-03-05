@@ -60,8 +60,6 @@ struct st_node_t : public location_data
 {
 	st_node_t* child;
 	StationID sid;
-//	TileIndex tile;
-//	Trackdir dir;
 };
 
 class visited_path_t
@@ -130,7 +128,7 @@ class GraphFtor : public StationFtor
 			else
 			{
 				// assume that this is the best path
-				// if this will overwritten in the future: no problem
+				// if this will be overwritten in the future: no problem
 				st_node.child = last_node;
 			}
 
@@ -248,10 +246,10 @@ struct AddStation : DumpStation
 	const visited_path_t& vp;
 	order_list* new_ol;
 
-	void add_node(const st_node_t& node) const {
+	void add_node(const st_node_t& node, bool stops) const {
 		const StationID sid = node.sid;
-		if(new_ol->stations.empty() || sid != new_ol->stations.back())
-		 new_ol->stations.push_back(sid);
+		if(new_ol->stations.empty() || sid != new_ol->stations.back().first)
+		 new_ol->stations.push_back(std::make_pair(sid, stops));
 		new_ol->min_station = std::min(new_ol->min_station, sid);
 	}
 
@@ -259,12 +257,14 @@ struct AddStation : DumpStation
 	{
 		DumpStation::operator ()(node);
 
-	/*	if(&node == vp.target)
+		bool stops = false;
+
+		if(&node == vp.target)
 		switch(nst)
 		{
 			case ONSF_STOP_EVERYWHERE:
 			case ONSF_NO_STOP_AT_INTERMEDIATE_STATIONS:
-				add_node(node);
+				stops = true;
 			default: break;
 		}
 		else
@@ -272,10 +272,11 @@ struct AddStation : DumpStation
 		{
 			case ONSF_STOP_EVERYWHERE:
 			case ONSF_NO_STOP_AT_DESTINATION_STATION:
-				add_node(node);
+				stops = true;
 			default: break;
-		}*/
-		add_node(node);
+		}
+
+		add_node(node, stops);
 	}
 
 	AddStation(OrderNonStopFlags nst, const visited_path_t& vp,
@@ -303,31 +304,11 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 	}
 //	std::cerr << std::endl;
 
-#if 0
-	for (Order *order = _ol->GetFirstOrder(); order != NULL; order = order->next)
-	{
-		if (order->IsType(OT_GOTO_STATION) /*|| order->IsType(OT_IMPLICIT)*/)
-		{
-			StationID sid = (StationID)order->GetDestination();
-
-			DoTrainPathfind()
-
-			// rewrites A->B->B->C as A->B->C
-/*			if(new_ol.stations.empty() || sid != new_ol.stations.back())
-			 new_ol.stations.push_back(sid);*/
-			new_ol.min_station = std::min(new_ol.min_station, sid);
-		}
-	}
-#endif
 	std::set<const OrderList*> order_lists_done;
 
-	//const Train* train;
-	/*FOR_ALL_TRAINS(train)*/ {
+	{
 
 		bool path_found;
-
-	//	if(train->orders.list != _ol)
-	//	 continue;
 
 		const OrderList* cur_ol = train->orders.list;
 		if(!cur_ol)
@@ -339,19 +320,20 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 		{
 			bool ok = true;
 			static char buf[256];
-			Order* first_order = NULL;
+			const Order *first_order = NULL, *first_found_order = NULL;
 
 			// how did the train enter the recently passed (e.g. current) station?
 			location_data recent_loc;
 			visited_path_t visited_path;
 
 			path_found = false;
-			for (Order *order = train->orders.list->GetFirstOrder();
+			for (const Order *order = train->orders.list->GetFirstOrder();
 				order != NULL && !path_found;
 				order = order->next)
 			{
 				if (order->IsType(OT_GOTO_STATION) /*|| order->IsType(OT_IMPLICIT)*/)
 				{
+					first_order = order;
 
 					StationID sid = (StationID)order->GetDestination();
 					SetDParam(0, sid); GetString(buf, STR_STATION_NAME, lastof(buf));
@@ -368,19 +350,21 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 						SetDParam(0, sid2); GetString(buf, STR_STATION_NAME, lastof(buf));
 						std::cerr << "Found: " << buf << std::endl;
 
-						first_order = order;
+						first_found_order = order;
 					}
 				}
 			}
 
-			if(!first_order) // no real stations found
+			if(!first_found_order) // no real stations found
 			 return; // => nothing to draw
 
 			// virtually drive once around to get the right track direction
 			{
 				std::cerr << "Still: " << recent_loc.tile
 						<< " / " << recent_loc.dir << std::endl;
-				for (Order *order = first_order->next; order != NULL; order = order->next)
+				bool go_on = true;
+				std::size_t round = 0;
+				for (const Order *order = cur_ol->GetNext(first_found_order); go_on; order = cur_ol->GetNext(order))
 				if (order->IsType(OT_GOTO_STATION))
 				{
 					StationID sid = (StationID)order->GetDestination();
@@ -393,10 +377,18 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 					for_all_stations_to(visited_path, dump_station);
 					std::cerr << "path found? " << path_found << std::endl;
 					recent_loc = *visited_path.target;
+
+					if(order == first_order && round)
+					 go_on = false;
+					++round;
 				}
 			}
-
-			for (Order *order = train->orders.list->GetFirstOrder(); order != NULL; order = order->next)
+			{
+			bool go_on = true;
+			std::size_t round = 0;
+			if(!first_order->next) // less than two stations?
+			 return;
+			for (const Order *order = first_order->next; go_on; order = cur_ol->GetNext(order))
 			{
 
 				if (order->IsType(OT_GOTO_STATION)
@@ -422,32 +414,34 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 				if(!path_found)
 				 break;
 
-#if 0
-				if (order->IsType(OT_GOTO_STATION) /*|| order->IsType(OT_IMPLICIT)*/)
-				{
-					StationID sid = (StationID)order->GetDestination();
+				if(order == first_order && round)
+				 go_on = false;
+				++round;
 
-					// rewrites A->B->B->C as A->B->C
-					if(new_ol.stations.empty() || sid != new_ol.stations.back())
-					 new_ol.stations.push_back(sid);
-					new_ol.min_station = std::min(new_ol.min_station, sid);
-				}
-#endif
-			}
+			} // for
+			} // scope
 
 			if(!path_found) {
 				std::cerr << "Warning: path for train #" << train->unitnumber << " not found" << std::endl;
 				return;
 			}
 
+			if(new_ol.stations.size())
+			{
+				if(new_ol.stations.front().first != new_ol.stations.back().first)
+				 throw "first and last stations differ!";
+				else
+				 new_ol.stations.front().second = new_ol.stations.back().second;
+			}
+			else return;
 
 			order_lists_done.insert(cur_ol);
 		}
 	}
 
-	if(new_ol.stations.size())
-	 if(new_ol.stations.back() == new_ol.stations.front())
-	  new_ol.stations.pop_back();
+//	if(new_ol.stations.size())
+//	 if(new_ol.stations.back() == new_ol.stations.front())
+//	  new_ol.stations.pop_back();
 
 	typedef std::multiset<order_list>::iterator it;
 	std::pair<it, it> itrs = file.order_lists.equal_range(new_ol);
@@ -474,11 +468,11 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 		if(added_is_subset || new_is_subset)
 		{
 			std::size_t start_found = 0;
-			std::vector<StationID>::const_iterator sitr
+			std::vector<std::pair<StationID, bool> >::const_iterator sitr
 				= already_added.stations.begin();
 			for( ;
 				sitr != already_added.stations.end() &&
-					*sitr != new_ol.stations.front()
+					sitr->first != new_ol.stations.front().first
 				; ++sitr, ++start_found) ;
 
 			if(sitr != already_added.stations.end())
@@ -516,6 +510,7 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 						std::size_t cur_old = start_found,
 							cur_new = 0;
 						bool equal = true;
+						// TODO: must care about passed stations here!
 						for(; cur_new < already_added.stations.size();
 							++cur_new,
 							cur_old = (cur_old == 0) ? (already_added.stations.size() - 1) : (cur_old - 1))
@@ -543,14 +538,14 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 		bool unique = true;
 		// O(n^2), but less (0) mallocs than sort
 		// and earlier abort in many cases
-		for(std::vector<StationID>::const_iterator sitr
+		for(std::vector<std::pair<StationID, bool> >::const_iterator sitr
 			= new_ol.stations.begin();
 				sitr != new_ol.stations.end(); ++sitr)
 		{
-			stations_used[*sitr] = true;
-			for(std::vector<StationID>::const_iterator sitr2 = sitr;
+			stations_used[sitr->first] = true;
+			for(std::vector<std::pair<StationID, bool> >::const_iterator sitr2 = sitr;
 				sitr2 != new_ol.stations.end() && unique; ++sitr2)
-					unique = unique && (*sitr != *sitr2);
+					unique = unique && (sitr->first != sitr2->first);
 		}
 
 		new_ol.is_cycle = (new_ol.stations.size() > 2) && unique;
@@ -565,7 +560,12 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 	}
 }
 
-const float scale = 25.0f;
+float coord_of(uint orig)
+{
+	const float scale = 25.0f;
+	const uint offset = 2.0f;
+	return orig / scale + offset;
+}
 
 void VideoDriver_Graph::SaveStation(struct railnet_file_info& file, const struct Station* st,
 	const std::vector<bool> &stations_used) const
@@ -578,8 +578,8 @@ void VideoDriver_Graph::SaveStation(struct railnet_file_info& file, const struct
 
 		station_info tmp_station;
 		tmp_station.name = buf;
-		tmp_station.x = (MapSizeX() - TileX(center))/scale;
-		tmp_station.y = (MapSizeY() - TileY(center))/scale;
+		tmp_station.x = coord_of(MapSizeX() - TileX(center));
+		tmp_station.y = coord_of(MapSizeY() - TileY(center));
 		file.stations.insert(std::make_pair(st->index, tmp_station));
 	}
 }
@@ -615,8 +615,6 @@ void VideoDriver_Graph::MainLoop()
 	std::vector<bool> stations_used;
 	stations_used.resize(_station_pool.size, false);
 
-//	const OrderList* _ol;
-//	FOR_ALL_ORDER_LISTS(_ol) { SaveOrderList(file, _ol, stations_used); }
 	const Train* train;
 	FOR_ALL_TRAINS(train) { SaveOrderList(file, train, stations_used); }
 
@@ -626,6 +624,7 @@ void VideoDriver_Graph::MainLoop()
 	const CargoSpec* carg;
 	FOR_ALL_CARGOSPECS(carg) { SaveCargoSpec(file, carg); }
 
+	std::cerr << "serializing " << file.order_lists.size() << " order lists..." << std::endl;
 	serialize(file, std::cout);
 }
 
