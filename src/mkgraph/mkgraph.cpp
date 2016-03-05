@@ -1,3 +1,10 @@
+/*
+ * This file is part of OpenTTD.
+ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
+ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <map>
 #include <iostream>
 #include <stdexcept>
@@ -5,25 +12,71 @@
 #include <cmath>
 #include "common.h"
 
+enum station_flag_t
+{
+	st_used = 1,
+	st_passed = 2
+};
+
 int main(int argc, char** argv)
 {
 	railnet_file_info file;
 	deserialize(file, std::cin);
+	std::map<StationID, int> station_flags;
+	std::set<CargoID> used_cargo_ids = { 0 };
 
 	std::cout <<	"digraph graphname\n" // TODO: get savegame name
 		"{\n"
 		"\tgraph[splines=line];\n"
-		"\tnode[label=\"\", shape=none, size=0.1, width=1.0, height=0.1];\n"
+		"\tnode[label=\"\", size=0.2, width=0.2, height=0.2];\n"
 		"\tedge[penwidth=2];\n";
+
+	// find out which stations are actually being used...
+	for(std::multiset<order_list>::iterator itr = file.order_lists.begin();
+		itr != file.order_lists.end(); ++itr)
+	{
+		{
+			bool cargo_found = false;
+			for(std::set<CargoID>::const_iterator itr2 = itr->cargo.begin();
+				!cargo_found && itr2 != itr->cargo.end(); ++itr2)
+			 cargo_found = (used_cargo_ids.find(*itr2) != used_cargo_ids.end());
+			if(!cargo_found)
+			 continue;
+		}
+
+		if(itr->stations.size())
+		{
+			order_list& ol = const_cast<order_list&>(*itr); // TODO: no const (see for loop)
+			for(std::vector<std::pair<StationID, bool> >::const_iterator
+					itr = ol.stations.begin();
+					itr != ol.stations.end(); ++itr)
+			{
+				station_flags[itr->first] |= itr->second ? st_used : st_passed;
+			}
+		}
+
+	}
+
 
 	for(const auto& pr : file.stations)
 	{
-		std::cout << "\t" << pr.first << " [xlabel=\""
-			<< pr.second.name << "\", pos=\""
-			<< pr.second.x
-			<< ", "
-			<< pr.second.y
-			<< "!\"];" << std::endl;
+		std::map<StationID, int>::const_iterator itr = station_flags.find(pr.first);
+		int flags = (itr == station_flags.end()) ? 0 : itr->second;
+		{
+			if(flags & st_used)
+			std::cout << "\t" << pr.first << " [xlabel=\""
+				<< pr.second.name << "\", pos=\""
+				<< pr.second.x
+				<< ", "
+				<< pr.second.y
+				<< "!\"];" << std::endl;
+			if(flags & st_passed)
+			std::cout << "\tp" << pr.first << " [pos=\""
+				<< pr.second.x-0.2f
+				<< ", "
+				<< pr.second.y-0.2f
+				<< "!\" size=0.0, width=0.0, height=0.0];" << std::endl;
+		}
 	}
 
 	float large_prime = 7919.0f; // algebra ftw!
@@ -33,24 +86,22 @@ int main(int argc, char** argv)
 	float value = 0.0f, hue = 0.0f;
 	std::cout.precision(3);
 
-	std::set<CargoID> used_cargo_ids = { 0 };
-
 	// TODO: const_iterator and container that visits begin() before end()
-	for(std::multiset<order_list>::iterator itr = file.order_lists.begin();
-		itr != file.order_lists.end(); ++itr)
+	for(std::multiset<order_list>::iterator itr3 = file.order_lists.begin();
+		itr3 != file.order_lists.end(); ++itr3)
 	{
 		{
 			bool cargo_found = false;
 			std::cerr << "cargo: ";
-			for(std::set<CargoID>::const_iterator itr2 = itr->cargo.begin();
-				itr2 != itr->cargo.end(); ++itr2)
+			for(std::set<CargoID>::const_iterator itr2 = itr3->cargo.begin();
+				itr2 != itr3->cargo.end(); ++itr2)
 					std::cerr << " " << +*itr2;
 			std::cerr << std::endl;
 
-			for(std::set<CargoID>::const_iterator itr2 = itr->cargo.begin();
-				!cargo_found && itr2 != itr->cargo.end(); ++itr2)
+			for(std::set<CargoID>::const_iterator itr2 = itr3->cargo.begin();
+				!cargo_found && itr2 != itr3->cargo.end(); ++itr2)
 			 cargo_found = (used_cargo_ids.find(*itr2) != used_cargo_ids.end());
-			std::cerr << "order: " << itr->unit_number << std::endl;
+			std::cerr << "order: " << itr3->unit_number << std::endl;
 			if(!cargo_found)
 			 std::cerr << "not found" << std::endl;
 			if(!cargo_found)
@@ -60,55 +111,47 @@ int main(int argc, char** argv)
 		hue = fmod(hue += order_list_step, 1.0f);
 		value = fmod(value += order_list_step_2, 1.0f);
 
-		if(itr->stations.size())
+		if(itr3->stations.size())
 		{
-			order_list& ol = const_cast<order_list&>(*itr); // TODO: no const (see for loop)
-			std::vector<StationID>::const_iterator recent;
+			order_list& ol = const_cast<order_list&>(*itr3); // TODO: no const (see for loop)
 			bool only_double_edges = ol.is_bicycle;
 			std::size_t double_edges = 0;
 			std::size_t mid = ol.stations.size() >> 1;
 
-			for(std::vector<StationID>::const_iterator itr = ol.stations.begin();
-				itr != ol.stations.end(); ++itr)
-			{
-				if(*itr == 502)
-				 std::cerr << "502" << std::endl;
-			}
-
 			if(!only_double_edges && !(ol.stations.size() & 1))
 			{
-				for(std::size_t i = 1; i < mid; ++i) {
+				for(std::size_t i = 1; i < mid; ++i)
 					double_edges += (
 						ol.stations[mid+i] == ol.stations[mid-i]);
-					if(ol.stations[mid+i] == 502 || ol.stations[mid-i] == 502)
-					{
-						std::cerr << "502" << std::endl;
-					}
-				}
 				only_double_edges = (double_edges == mid - 1);
 			}
 
 			std::cerr << "only double edges? " << only_double_edges << std::endl;
 
 			// make printing easier:
-			ol.stations.push_back(ol.stations.front());
+			if(ol.stations.front().first != ol.stations.back().first)
+			{
+				ol.stations.push_back(ol.stations.front());
+			}
 
-			std::cout << "\t// order " << itr->unit_number << " ("
-				<< file.stations[ol.stations[0]].name << " - "
-				<< file.stations[ol.stations[mid]].name
+			std::cout << "\t// order " << itr3->unit_number << " ("
+				<< file.stations[ol.stations[0].first].name << " - "
+				<< file.stations[ol.stations[mid].first].name
 				<< ")" << std::endl;
 
 			std::cout << "\t// cargo: ";
-			for(std::set<CargoID>::const_iterator itr2 = itr->cargo.begin();
-				itr2 != itr->cargo.end(); ++itr2)
+			for(std::set<CargoID>::const_iterator itr2 = itr3->cargo.begin();
+				itr2 != itr3->cargo.end(); ++itr2)
 					std::cout << " " << +*itr2;
 			std::cout << std::endl;
 
 			std::cout << "\t//";
-			for(std::vector<StationID>::const_iterator itr = ol.stations.begin();
+			for(std::vector<std::pair<StationID, bool> >::const_iterator
+				itr = ol.stations.begin();
 				itr != ol.stations.end(); ++itr)
 			{
-				std::cout << " " << file.stations[*itr].name;
+				std::cout << " - " << file.stations[itr->first].name <<
+					(itr->second ? "" : "(p)");
 			}
 			//std::cout << " " << *itr;
 			std::cout << std::endl;
@@ -125,6 +168,11 @@ int main(int argc, char** argv)
 				std::cout << "];" << std::endl;
 			};
 
+			auto print_station = [&](const char* before, const std::pair<StationID, bool>& pr)
+			{
+				std::cout << before << (pr.second ? "" : "p") << pr.first;
+			};
+
 			enum class edge_type_t
 			{
 				unique,
@@ -133,14 +181,16 @@ int main(int argc, char** argv)
 			};
 			edge_type_t last_edge_type = edge_type_t::duplicate_further;
 
-			for(std::vector<StationID>::const_iterator itr = ol.stations.begin() + 1;
+			for(std::vector<std::pair<StationID, bool>>::const_iterator
+				itr = ol.stations.begin() + 1;
 				itr != ol.stations.end(); ++itr)
 			{
 				const bool first = itr == ol.stations.begin();
 
 				edge_type_t edge_type = edge_type_t::unique;
 
-				for(std::vector<StationID>::const_iterator itr2 = ol.stations.begin();
+				for(std::vector<std::pair<StationID, bool>>::const_iterator
+					itr2 = ol.stations.begin();
 					!(int)edge_type && itr2 != itr; ++itr2)
 					// itr2 < itr => itr2 + 1 is valid
 					// itr == begin => for loop is not run => itr - 1 is valid
@@ -148,7 +198,8 @@ int main(int argc, char** argv)
 						edge_type = edge_type_t::duplicate_further;
 
 				if(!first)
-				for(std::vector<StationID>::const_iterator itr2 = itr + 1;
+				for(std::vector<std::pair<StationID, bool>>::const_iterator
+					itr2 = itr + 1;
 					!(int)edge_type && itr2 != ol.stations.end(); ++itr2)
 					// itr2 > itr => itr2 - 1 is valid
 					// !first => itr - 1 is valid
@@ -163,14 +214,14 @@ int main(int argc, char** argv)
 				 print_end(last_edge_type == edge_type_t::duplicate_first);
 
 				if(edge_type != last_edge_type && edge_type != edge_type_t::duplicate_further)
-				 std::cout << "\t" << *(itr - 1);
+				 print_station("\t", *(itr - 1));
 
 				if(edge_type != edge_type_t::duplicate_further)
-				 std::cout << " -> " << *itr;
+				 print_station(" -> ", *itr);
 
-				if(file.stations.find(*itr) == file.stations.end())
+				if(file.stations.find(itr->first) == file.stations.end())
 				{
-					std::cerr << "Could not find station id " << *itr << std::endl;
+					std::cerr << "Could not find station id " << itr->first << std::endl;
 					throw std::runtime_error("invalid station id in order list");
 				}
 
