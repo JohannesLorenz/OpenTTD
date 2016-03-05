@@ -33,7 +33,11 @@ coding guidelines and has not been approved by the OpenTTD developers.
 
 ## Installing
 ```sh
-make install # probably to some non-system path
+git clone https://github.com/JohannesLorenz/OpenTTD openttd-mkgraph
+cd openttd-mkgraph
+# now, follow the usual
+# [installation instructions for OpenTTD](../../readme.txt)
+# then, type
 clang++ -lm -g -ggdb -Wall -Wextra -std=c++11 -DEXPORTER src/mkgraph/*.cpp \
   -o mkgraph
 ```
