@@ -28,6 +28,7 @@ coding guidelines and has not been approved by the OpenTTD developers.
 
 # 3 Installation
 ## Requirements
+  * git
   * A C++11 compiler
   * the dot utility (called "dot" on linux)
 
@@ -37,6 +38,10 @@ git clone https://github.com/JohannesLorenz/OpenTTD openttd-mkgraph
 cd openttd-mkgraph
 # now, follow the usual
 # [installation instructions for OpenTTD](../../readme.txt)
+# usually, it's enough to do
+CC=clang CXX=clang++ ./configure --prefix=/where/you/want/to/install/it \
+  --enable-debug=3
+make install
 # then, type
 clang++ -lm -g -ggdb -Wall -Wextra -std=c++11 -DEXPORTER src/mkgraph/*.cpp \
   -o mkgraph
