@@ -22,6 +22,7 @@ typedef uint32_t uint32;
 typedef uint16 StationID;
 typedef byte CargoID;
 typedef uint16 UnitID; // TODO: remove or type assertion
+typedef uint32 CargoLabel;
 #else
 #include "../station_base.h"
 #include "../transport_type.h"
@@ -35,7 +36,7 @@ struct order_list
 	bool is_cycle;
 	bool is_bicycle; //! at least two trains that drive in opposite cycles
 	StationID min_station;
-	std::set<CargoID> cargo; // cargo order and amount does not matter
+	std::set<CargoLabel> cargo; // cargo order and amount does not matter
 	std::vector<std::pair<StationID, bool> > stations;
 	bool operator<(const order_list& other) const;
 	order_list() : is_cycle(false), is_bicycle(false),
@@ -56,7 +57,7 @@ struct railnet_file_info
 	static const uint version;
 	std::multiset<order_list> order_lists;
 	std::map<StationID, station_info> stations;
-	std::map<CargoID, std::string> cargo_names;
+	std::map<char, CargoLabel> cargo_names;
 };
 
 
