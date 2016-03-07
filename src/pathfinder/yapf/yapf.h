@@ -99,10 +99,13 @@ bool YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, b
 
 class StationFtor
 {
-	virtual void OnStationTile(const TileIndex& t, const Trackdir& td, int cost) = 0;
+	virtual void OnTile(const struct Station& st, const TileIndex& t, const Trackdir& td, int cost) = 0;
+	virtual void OnTile(const struct Waypoint& wp, const TileIndex& t, const Trackdir& td, int cost) = 0;
+	virtual void OnTile(const struct Depot& dp, const TileIndex& t, const Trackdir& td, int cost) = 0;
 public:
-	void operator()(const TileIndex& t, const Trackdir& td, int cost) {
-		OnStationTile(t, td, cost); }
+	template<class T>
+	void operator()(const T& building, const TileIndex& t, const Trackdir& td, int cost) {
+		OnTile(building, t, td, cost); }
 };
 
 /**

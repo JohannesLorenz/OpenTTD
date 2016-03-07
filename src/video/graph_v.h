@@ -4,13 +4,16 @@
 #include "null_v.h"
 #include <vector>
 
+typedef uint32 CargoLabel; // forward declaration
+
 class VideoDriver_Graph : public VideoDriver_Null
 {
 	void SaveOrderList(struct railnet_file_info& file, const Train *train,
-		std::vector<bool> &stations_used) const;
-	void SaveStation(struct railnet_file_info& file, const struct Station* st,
+		std::vector<bool> &stations_used, std::set<CargoLabel> &cargo_used) const;
+	void SaveStation(struct railnet_file_info& file, const struct BaseStation* st,
 		const std::vector<bool> &stations_used) const;
 	void SaveCargoSpec(struct railnet_file_info& file, const struct CargoSpec* carg) const;
+	void SaveCargoLabels(railnet_file_info &file, std::set<CargoLabel> &s) const;
 public:
 	VideoDriver_Graph();
 	/* virtual */ void MainLoop();
