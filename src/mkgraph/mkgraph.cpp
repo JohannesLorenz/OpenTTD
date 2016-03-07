@@ -10,7 +10,10 @@
 #include <stdexcept>
 #include <getopt.h>
 #include <cmath>
+#include <cstdlib>
+
 #include "common.h"
+#include "mkgraph_options.h"
 
 enum station_flag_t
 {
@@ -18,12 +21,53 @@ enum station_flag_t
 	st_passed = 2
 };
 
-int main(int argc, char** argv)
+void print_version()
+{
+	std::cerr << "version: <not specified yet>" << std::endl;
+	std::cerr << "railnet file version: " << railnet_file_info::version << std::endl;
+}
+
+void print_help()
+{
+	std::cerr << "mkgraph tool" << std::endl;
+	std::cerr << "converts openttd railnet dumps into dot graphs" << std::endl;
+	options::usage();
+}
+#include <cstring> // TODO
+#include <algorithm>
+int run(const options& opt)
 {
 	railnet_file_info file;
 	deserialize(file, std::cin);
+
+	std::set<int> cargo_ids;
+
+	{
+		union
+		{
+			int lbl[2];
+			char str[8];
+		} lbl_to_str;
+		lbl_to_str.lbl[1] = 0;
+
+		for(const auto& pr : file.cargo_names)
+		{
+			lbl_to_str.lbl[0] = pr.second;
+			std::reverse(lbl_to_str.str, lbl_to_str.str + 4);
+
+			if(opt.command == options::cmd_list_cargo)
+			 std::cout << lbl_to_str.str << std::endl;
+			else if(strstr(opt.cargo.c_str(), lbl_to_str.str))
+			 cargo_ids.insert(pr.second);
+		}
+		if(opt.command == options::cmd_list_cargo)
+		 return 0;
+	}
+
+	if(cargo_ids.size() != (opt.cargo.length()+1)/5)
+	 throw "not all of your cargos are known";
+
 	std::map<StationID, int> station_flags;
-	std::set<CargoID> used_cargo_ids = { 0 };
 
 	std::cout <<	"digraph graphname\n" // TODO: get savegame name
 		"{\n"
@@ -32,14 +76,16 @@ int main(int argc, char** argv)
 		"\tedge[penwidth=2];\n";
 
 	// find out which stations are actually being used...
+
+	// only set flags
 	for(std::multiset<order_list>::iterator itr = file.order_lists.begin();
 		itr != file.order_lists.end(); ++itr)
 	{
 		{
 			bool cargo_found = false;
-			for(std::set<CargoID>::const_iterator itr2 = itr->cargo.begin();
+			for(std::set<CargoLabel>::const_iterator itr2 = itr->cargo.begin();
 				!cargo_found && itr2 != itr->cargo.end(); ++itr2)
-			 cargo_found = (used_cargo_ids.find(*itr2) != used_cargo_ids.end());
+			 cargo_found = (cargo_ids.find(*itr2) != cargo_ids.end());
 			if(!cargo_found)
 			 continue;
 		}
@@ -57,7 +103,7 @@ int main(int argc, char** argv)
 
 	}
 
-
+	// draw nodes if stations are used
 	for(const auto& pr : file.stations)
 	{
 		std::map<StationID, int>::const_iterator itr = station_flags.find(pr.first);
@@ -92,15 +138,16 @@ int main(int argc, char** argv)
 	{
 		{
 			bool cargo_found = false;
-			std::cerr << "cargo: ";
+	/*		std::cerr << "cargo: ";
 			for(std::set<CargoID>::const_iterator itr2 = itr3->cargo.begin();
 				itr2 != itr3->cargo.end(); ++itr2)
 					std::cerr << " " << +*itr2;
-			std::cerr << std::endl;
+			std::cerr << std::endl;*/
 
-			for(std::set<CargoID>::const_iterator itr2 = itr3->cargo.begin();
+			for(std::set<CargoLabel>::const_iterator itr2 = itr3->cargo.begin();
 				!cargo_found && itr2 != itr3->cargo.end(); ++itr2)
-			 cargo_found = (used_cargo_ids.find(*itr2) != used_cargo_ids.end());
+			 cargo_found = (cargo_ids.find(*itr2) != cargo_ids.end());
+
 			std::cerr << "order: " << itr3->unit_number << std::endl;
 			if(!cargo_found)
 			 std::cerr << "not found" << std::endl;
@@ -139,12 +186,13 @@ int main(int argc, char** argv)
 				<< file.stations[ol.stations[mid].first].name
 				<< ")" << std::endl;
 
+#if 0
 			std::cout << "\t// cargo: ";
 			for(std::set<CargoID>::const_iterator itr2 = itr3->cargo.begin();
 				itr2 != itr3->cargo.end(); ++itr2)
 					std::cout << " " << +*itr2;
 			std::cout << std::endl;
-
+#endif
 			std::cout << "\t//";
 			for(std::vector<std::pair<StationID, bool> >::const_iterator
 				itr = ol.stations.begin();
@@ -236,4 +284,30 @@ int main(int argc, char** argv)
 	std::cout << '}' << std::endl;
 
 	return 0;
+}
+
+int main(int argc, char** argv)
+{
+	try
+	{
+		setlocale(LC_ALL, "en_US.UTF-8");
+		options opt(argc, argv);
+		switch(opt.command)
+		{
+			case options::cmd_print_help:
+				print_help();
+				break;
+			case options::cmd_print_version:
+				print_version();
+				break;
+			default:
+				run(opt);
+		}
+	} catch(const char* s)
+	{
+		std::cerr << "Error: " << s << std::endl;
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
 }

@@ -14,7 +14,7 @@
 #include <iostream>
 #include "common.h"
 
-const std::string railnet_file_info::hdr = "railnet";
+const std::string railnet_file_info::hdr = "openttd/railnet";
 const uint railnet_file_info::version = 0;
 
 void _wrt(std::ostream& o, const char* raw, std::size_t sz) {
