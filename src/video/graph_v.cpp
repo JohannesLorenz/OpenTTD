@@ -101,17 +101,39 @@ class GraphFtor : public StationFtor
 	visited_path_t* visited_path;
 	static st_node_t* last_node;
 	bool last_station;
-	virtual void OnStationTile(const TileIndex &t, const Trackdir& td, int cost)
+
+	enum building_type
+	{
+		bt_depot,
+		bt_station,
+		bt_waypoint
+	};
+
+	virtual void OnTile(const Depot& dp, const TileIndex &t, const Trackdir& td, int cost)
+	{
+		//_OnTile(dp.index, t, td, cost, bt_depot);
+	}
+
+	virtual void OnTile(const Waypoint& wp, const TileIndex &t, const Trackdir& td, int cost)
+	{
+		_OnTile(wp.index, t, td, cost, bt_waypoint);
+	}
+
+	virtual void OnTile(const Station& st, const TileIndex &t, const Trackdir& td, int cost)
+	{
+		_OnTile(st.index, t, td, cost, bt_station);
+	}
+
+	template<class T>
+	void _OnTile(const T& index, const TileIndex &t, const Trackdir& td, int cost,
+		building_type bt)
 	{
 		if(last_station)
 		 last_node = NULL;
-
-		Station* station = Station::GetByTile(t);
-		// if it's a station, and not the same one as last time
-		if(station && (!last_node || last_node->sid != station->index))
+		std::cerr << " GraphFtor: ???" << std::endl;
+		if(!last_node || last_node->sid != index)
 		{
-			StationID sid = station->index;
-
+			std::cerr << " GraphFtor: ??? " << IsDepotTile(t) << std::endl;
 			st_node_t& st_node = visited_path->path[std::make_pair(t, td)];
 			if(last_station)
 			{
@@ -132,11 +154,12 @@ class GraphFtor : public StationFtor
 				st_node.child = last_node;
 			}
 
-			st_node.sid = sid;
+			// only real stations should be displayed in the end
+			// others only give a positional information
+			st_node.sid = (bt == bt_depot) ? INVALID_STATION : index;
+
 			st_node.dir = td;
 			st_node.tile = t;
-
-			location_data cur_st_loc(t, ReverseTrackdir(td));
 
 			// denote our station as the first station
 			// can be overwritten by subsequent calls
@@ -145,25 +168,31 @@ class GraphFtor : public StationFtor
 			last_node = &st_node;
 
 			static char buf[256];
-
-
-			SetDParam(0, sid); GetString(buf, STR_STATION_NAME, lastof(buf));
-			std::cerr << " GraphFtor: " << buf << ", tiles:" << std::endl;
-
-			fprintf(stderr, "    %d, %d\n", TileX(t), TileY(t));
-
-			// try from this station into the reverse direction
-			if(last_station /*|| cost <= 0*/) {
-				std::cerr << "->NOCOMP: " << cost << std::endl;
-				// yapf allows "negative pentalties" for the starting tile
-				// so, we must disallow loops
-			}
-			else {
-				_ForAllStationsTo(train, cur_st_loc, order,
-					visited_path, max_cost - std::max(cost, 0));
+			if(bt != bt_depot) // print station
+			{
+				SetDParam(0, index); GetString(buf, STR_STATION_NAME, lastof(buf));
+				std::cerr << " GraphFtor: " << buf << ", tiles:" << std::endl;
+				fprintf(stderr, "    %d, %d\n", TileX(t), TileY(t));
 			}
 
-			std::cerr << " <- GraphFtor: " << buf << std::endl;
+			// simulate turnaround in stations
+			if(bt == bt_station)
+			{
+				// try from this station into the reverse direction
+				if(last_station /*|| cost <= 0*/) {
+					std::cerr << "->NOCOMP: " << cost << std::endl;
+					// yapf allows "negative pentalties" for the starting tile
+					// so, we must disallow loops
+				}
+				else {
+					_ForAllStationsTo(train,
+						location_data(t, ReverseTrackdir(td)), order,
+						visited_path, max_cost - std::max(cost, 0));
+				}
+			}
+
+			if(bt != bt_depot)
+			 std::cerr << " <- GraphFtor: " << buf << std::endl;
 
 			last_station = false;
 		}
@@ -178,7 +207,9 @@ public:
 		last_station(true),
 		max_cost(0),
 		train(train),
-		order(order) {}
+		order(order) {
+			//last_node = NULL;
+		}
 };
 
 st_node_t* GraphFtor::last_node = NULL;
@@ -229,14 +260,15 @@ struct DumpStation
 	{
 		if(node.tile == INVALID_TILE || node.dir == INVALID_TRACKDIR)
 		 throw "Internal error";
-		if(!Station::GetByTile(node.tile))
-		 throw "Internal error";
 
-		static char buf[256];
-		SetDParam(0, node.sid); GetString(buf, STR_STATION_NAME, lastof(buf));
-		std::cerr << " (-> Station): " << buf << ", tiles:" << std::endl;
+		if(node.sid != INVALID_STATION)
+		{
+			static char buf[256];
+			SetDParam(0, node.sid); GetString(buf, STR_STATION_NAME, lastof(buf));
+			std::cerr << " (-> Station): " << buf << ", tiles:" << std::endl;
 
-		fprintf(stderr, "    %d, %d\n", TileX(node.tile), TileY(node.tile));
+			fprintf(stderr, "    %d, %d\n", TileX(node.tile), TileY(node.tile));
+		}
 	}
 } dump_station;
 
@@ -259,7 +291,11 @@ struct AddStation : DumpStation
 
 		bool stops = false;
 
-		if(&node == vp.target)
+		if(Waypoint::GetByTile(node.tile))
+		{
+			// don't stop at waypoints
+		}
+		else if(&node == vp.target)
 		switch(nst)
 		{
 			case ONSF_STOP_EVERYWHERE:
@@ -284,7 +320,7 @@ struct AddStation : DumpStation
 };
 
 void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList* _ol,*/const Train* train,
-	std::vector<bool>& stations_used) const
+	std::vector<bool>& stations_used, std::set<CargoLabel>& cargo_used) const
 {
 	order_list new_ol;
 
@@ -294,15 +330,23 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 	/*
 		basically fill new order list
 	*/
-//	std::cerr << "cargo: ";
+	std::cerr << "cargo: ";
 	for (Vehicle *v = train->orders.list->GetFirstSharedVehicle(); v != NULL; v = v->Next())
 	{
 		if(v->cargo_cap) {
-			new_ol.cargo.insert(v->cargo_type);
-//			std::cerr << " " << +v->cargo_type;
+			if(CargoSpec::Get(v->cargo_type)->IsValid())
+			{
+				CargoLabel lbl = CargoSpec::Get(v->cargo_type)->label;
+				new_ol.cargo.insert(lbl);
+				std::cerr << " " << (char)(lbl >> 24)
+					<< (char)((lbl >> 16) & 0xFF)
+					<< (char)((lbl >> 8) & 0xFF)
+					<< (char)(lbl & 0xFF)
+					;
+			}
 		}
 	}
-//	std::cerr << std::endl;
+	std::cerr << std::endl;
 
 	std::set<const OrderList*> order_lists_done;
 
@@ -330,8 +374,8 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 			for (const Order *order = train->orders.list->GetFirstOrder();
 				order != NULL && !path_found;
 				order = order->next)
-			{
-				if (order->IsType(OT_GOTO_STATION) /*|| order->IsType(OT_IMPLICIT)*/)
+			{ // TODO: handle depots + waypoints!
+				if (order->IsType(OT_GOTO_STATION))
 				{
 					first_order = order;
 
@@ -430,13 +474,18 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 			{
 				if(new_ol.stations.front().first != new_ol.stations.back().first)
 				 throw "first and last stations differ!";
-				else
-				 new_ol.stations.front().second = new_ol.stations.back().second;
+				else {
+					// we do this for cycle detection etc
+					new_ol.stations.front().second = new_ol.stations.back().second;
+					new_ol.stations.pop_back();
+				}
 			}
 			else return;
 
 			order_lists_done.insert(cur_ol);
 		}
+		else
+		 return; // only useless cases
 	}
 
 //	if(new_ol.stations.size())
@@ -462,8 +511,8 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 		// if the cargo types are no subsets, then it is another line
 		bool added_is_subset = std::includes(new_ol.cargo.begin(), new_ol.cargo.end(),
 			already_added.cargo.begin(), already_added.cargo.end());
-		bool new_is_subset = std::includes(new_ol.cargo.begin(), new_ol.cargo.end(),
-			already_added.cargo.begin(), already_added.cargo.end());
+		bool new_is_subset = std::includes(already_added.cargo.begin(), already_added.cargo.end(),
+			new_ol.cargo.begin(), new_ol.cargo.end());
 
 		if(added_is_subset || new_is_subset)
 		{
@@ -486,7 +535,7 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 					same_order = true;
 					for(std::size_t i = 0; i < sz; ++i)
 					 same_order = same_order && (new_ol.stations[i]
-						== already_added.stations[start_found+i%sz]);
+						== already_added.stations[(start_found+i)%sz]);
 				}
 
 				if(same_order)
@@ -501,20 +550,22 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 					// case 2: the next stations of the new line and of the old line
 					//	sum up to *one* bidirectional circle
 					// don't insert, but add bidirectional edges (if required)
-					if(already_added.is_bicycle || already_added.is_cycle)
-					{
+				//	if(already_added.is_bicycle || already_added.is_cycle)
+				//	{
 						// must be either the same direction
 						// (then same_order was already true)
 						// or the opposite direction
 						// => it must be the opposite direction
-						std::size_t cur_old = start_found,
-							cur_new = 0;
+
 						bool equal = true;
 						// TODO: must care about passed stations here!
-						for(; cur_new < already_added.stations.size();
+						/*for(; cur_new < already_added.stations.size();
 							++cur_new,
 							cur_old = (cur_old == 0) ? (already_added.stations.size() - 1) : (cur_old - 1))
-							equal = equal && (already_added.stations[cur_old] == new_ol.stations[cur_new]);
+							equal = equal && (already_added.stations[cur_old] == new_ol.stations[cur_new]);*/
+						for(std::size_t i = 0; i < sz; ++i)
+							equal = equal && (new_ol.stations[i]
+								== already_added.stations[(start_found+sz-i)%sz]);
 
 						if(equal)
 						{
@@ -522,9 +573,11 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 								already_added.is_cycle = false;
 								already_added.is_bicycle = true;
 							}
+							// for bicycle, no need to add another
+							// for non-cylce, no need to add anything
 							this_is_a_new_line = false;
 						}
-					}
+				//	}
 
 				}
 			}
@@ -548,6 +601,12 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 					unique = unique && (sitr->first != sitr2->first);
 		}
 
+		for(std::set<CargoLabel>::const_iterator citr = new_ol.cargo.begin();
+			citr != new_ol.cargo.end(); ++citr)
+		{
+			cargo_used.insert(*citr);
+		}
+
 		new_ol.is_cycle = (new_ol.stations.size() > 2) && unique;
 		// bi-cycle at this point is yet forbidden
 		// you could have a train running A->B->C->D->A->D->C->B,
@@ -567,7 +626,7 @@ float coord_of(uint orig)
 	return orig / scale + offset;
 }
 
-void VideoDriver_Graph::SaveStation(struct railnet_file_info& file, const struct Station* st,
+void VideoDriver_Graph::SaveStation(struct railnet_file_info& file, const struct BaseStation* st,
 	const std::vector<bool> &stations_used) const
 {
 	static char buf[256];
@@ -586,12 +645,21 @@ void VideoDriver_Graph::SaveStation(struct railnet_file_info& file, const struct
 
 void VideoDriver_Graph::SaveCargoSpec(railnet_file_info &file, const CargoSpec *carg) const
 {
-	static char buf[256];
+/*	static char buf[256];
+	int count = 0;
 	if(carg->IsValid())
 	{
-		SetDParam(0, 1 << carg->Index()); GetString(buf, STR_JUST_CARGO_LIST, lastof(buf));
-		file.cargo_names.insert(std::make_pair(carg->Index(), buf));
-	}
+	//	SetDParam(0, 1 << carg->Index()); GetString(buf, STR_JUST_CARGO_LIST, lastof(buf));
+	//	file.cargo_names.insert(std::make_pair(carg->Index(), buf));
+		file.cargo_names.insert(std::make_pair(++count, ));
+	}*/
+}
+
+void VideoDriver_Graph::SaveCargoLabels(railnet_file_info &file, std::set<CargoLabel>& s) const
+{
+	int count = 0;
+	for(std::set<CargoLabel>::const_iterator itr = s.begin(); itr != s.end(); ++itr)
+	 file.cargo_names.insert(std::make_pair(++count, *itr));
 }
 
 void VideoDriver_Graph::MainLoop()
@@ -602,7 +670,7 @@ void VideoDriver_Graph::MainLoop()
 		UpdateWindows();
 	//}
 
-	if(!detail::is_same<CargoID, byte>::value ||
+	if(!detail::is_same<CargoID, byte>::value || // TODO: cargoid -> cargolabel
 		!detail::is_same<StationID, uint16>::value)
 	{
 		std::cerr << "Error! Types changed in OpenTTD. "
@@ -613,16 +681,18 @@ void VideoDriver_Graph::MainLoop()
 	railnet_file_info file;
 
 	std::vector<bool> stations_used;
+	std::set<CargoLabel> cargo_used;
 	stations_used.resize(_station_pool.size, false);
 
 	const Train* train;
-	FOR_ALL_TRAINS(train) { SaveOrderList(file, train, stations_used); }
+	FOR_ALL_TRAINS(train) { SaveOrderList(file, train, stations_used, cargo_used); }
 
-	const Station* st;
-	FOR_ALL_STATIONS(st) { SaveStation(file, st, stations_used); }
+	const BaseStation* st;
+	FOR_ALL_BASE_STATIONS(st) { SaveStation(file, st, stations_used); }
 
-	const CargoSpec* carg;
-	FOR_ALL_CARGOSPECS(carg) { SaveCargoSpec(file, carg); }
+	/*const CargoSpec* carg;
+	FOR_ALL_CARGOSPECS(carg) { SaveCargoSpec(file, carg); }*/
+	SaveCargoLabels(file, cargo_used);
 
 	std::cerr << "serializing " << file.order_lists.size() << " order lists..." << std::endl;
 	serialize(file, std::cout);
