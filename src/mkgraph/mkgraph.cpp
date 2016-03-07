@@ -5,12 +5,14 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cstring>
 #include <map>
 #include <iostream>
 #include <stdexcept>
 #include <getopt.h>
 #include <cmath>
 #include <cstdlib>
+#include <algorithm>
 
 #include "common.h"
 #include "mkgraph_options.h"
@@ -33,8 +35,20 @@ void print_help()
 	std::cerr << "converts openttd railnet dumps into dot graphs" << std::endl;
 	options::usage();
 }
-#include <cstring> // TODO
-#include <algorithm>
+
+union lbl_to_str_t
+{
+	int lbl[2];
+	char str[8];
+	lbl_to_str_t() : lbl{0,0} {}
+	const char* convert(int value)
+	{
+		lbl[0] = value;
+		std::reverse(str, str + 4);
+		return str;
+	}
+} lbl_to_str;
+
 int run(const options& opt)
 {
 	railnet_file_info file;
@@ -43,21 +57,15 @@ int run(const options& opt)
 	std::set<int> cargo_ids;
 
 	{
-		union
-		{
-			int lbl[2];
-			char str[8];
-		} lbl_to_str;
-		lbl_to_str.lbl[1] = 0;
+
 
 		for(const auto& pr : file.cargo_names)
 		{
-			lbl_to_str.lbl[0] = pr.second;
-			std::reverse(lbl_to_str.str, lbl_to_str.str + 4);
+			const char* str = lbl_to_str.convert(pr.second);
 
 			if(opt.command == options::cmd_list_cargo)
-			 std::cout << lbl_to_str.str << std::endl;
-			else if(strstr(opt.cargo.c_str(), lbl_to_str.str))
+			 std::cout << str << std::endl;
+			else if(strstr(opt.cargo.c_str(), str))
 			 cargo_ids.insert(pr.second);
 		}
 		if(opt.command == options::cmd_list_cargo)
@@ -204,7 +212,7 @@ int run(const options& opt)
 			//std::cout << " " << *itr;
 			std::cout << std::endl;
 
-			auto print_end = [&](bool double_edge)
+			auto print_end = [&](bool double_edge, std::size_t i, const std::set<CargoLabel>& cargo)
 			{
 				// values below 50 get difficult to read
 				float _value = 0.5f + (value/2.0f);
@@ -212,6 +220,19 @@ int run(const options& opt)
 				if(double_edge)
 				{
 					std::cout << ", dir=none";
+				}
+				std::cerr << i << std::endl;
+				if(cargo_ids.size() > 1)
+				{
+					std::cout << ", label=\"";
+					bool first = true;
+					for(const int& id : cargo)
+					{
+						std::cout << (first ? "" : ", ")
+							<< lbl_to_str.convert(id);
+						first = false;
+					}
+					std::cout << "\"";
 				}
 				std::cout << "];" << std::endl;
 			};
@@ -229,9 +250,10 @@ int run(const options& opt)
 			};
 			edge_type_t last_edge_type = edge_type_t::duplicate_further;
 
+			std::size_t count = 0;
 			for(std::vector<std::pair<StationID, bool>>::const_iterator
 				itr = ol.stations.begin() + 1;
-				itr != ol.stations.end(); ++itr)
+				itr != ol.stations.end(); ++itr, ++count)
 			{
 				const bool first = itr == ol.stations.begin();
 
@@ -259,7 +281,7 @@ int run(const options& opt)
 				// => duplicate_further wins
 
 				if(last_edge_type != edge_type_t::duplicate_further && edge_type != last_edge_type)
-				 print_end(last_edge_type == edge_type_t::duplicate_first);
+				 print_end(last_edge_type == edge_type_t::duplicate_first, count, ol.cargo);
 
 				if(edge_type != last_edge_type && edge_type != edge_type_t::duplicate_further)
 				 print_station("\t", *(itr - 1));
@@ -277,7 +299,7 @@ int run(const options& opt)
 			}
 
 			if(last_edge_type != edge_type_t::duplicate_further)
-			 print_end(last_edge_type == edge_type_t::duplicate_first);
+			 print_end(last_edge_type == edge_type_t::duplicate_first, count, ol.cargo);
 		}
 	}
 
