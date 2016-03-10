@@ -14,6 +14,8 @@ struct options
 	} command = cmd_create_graph;
 
 	std::string cargo;
+	bool include_express = false,
+		include_subsets = false;
 
 	options(int arg, char** argv);
 	static void usage();
