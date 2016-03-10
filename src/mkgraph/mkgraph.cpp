@@ -54,37 +54,39 @@ int run(const options& opt)
 	railnet_file_info file;
 	deserialize(file, std::cin);
 
+	/*
+		find out which cargo is used...
+	*/
 	std::set<int> cargo_ids;
 
+	for(const auto& pr : file.cargo_names)
 	{
+		const char* str = lbl_to_str.convert(pr.second);
 
-
-		for(const auto& pr : file.cargo_names)
-		{
-			const char* str = lbl_to_str.convert(pr.second);
-
-			if(opt.command == options::cmd_list_cargo)
-			 std::cout << str << std::endl;
-			else if(strstr(opt.cargo.c_str(), str))
-			 cargo_ids.insert(pr.second);
-		}
 		if(opt.command == options::cmd_list_cargo)
-		 return 0;
+		 std::cout << str << std::endl;
+		else if(strstr(opt.cargo.c_str(), str))
+		 cargo_ids.insert(pr.second);
 	}
+	if(opt.command == options::cmd_list_cargo)
+	 return 0;
 
 	if(cargo_ids.size() != (opt.cargo.length()+1)/5)
 	 throw "not all of your cargos are known";
 
 	std::map<StationID, int> station_flags;
 
-	std::cout <<	"digraph graphname\n" // TODO: get savegame name
-		"{\n"
-		"\tgraph[splines=line];\n"
-		"\tnode[label=\"\", size=0.2, width=0.2, height=0.2];\n"
-		"\tedge[penwidth=2];\n";
+	// TODO: remove wrong cargo from order list already here!
 
-	// find out which stations are actually being used...
 
+	/*
+		sort out subset or express trains
+	*/
+
+
+	/*
+		find out which stations are actually being used...
+	*/
 	// only set flags
 	for(std::multiset<order_list>::iterator itr = file.order_lists.begin();
 		itr != file.order_lists.end(); ++itr)
@@ -110,6 +112,15 @@ int run(const options& opt)
 		}
 
 	}
+
+	/*
+		draw nodes
+	*/
+	std::cout <<	"digraph graphname\n" // FEATURE: get savegame name
+		"{\n"
+		"\tgraph[splines=line];\n"
+		"\tnode[label=\"\", size=0.2, width=0.2, height=0.2];\n"
+		"\tedge[penwidth=2];\n";
 
 	// draw nodes if stations are used
 	for(const auto& pr : file.stations)
@@ -140,6 +151,9 @@ int run(const options& opt)
 	float value = 0.0f, hue = 0.0f;
 	std::cout.precision(3);
 
+	/*
+		draw edges
+	*/
 	// TODO: const_iterator and container that visits begin() before end()
 	for(std::multiset<order_list>::iterator itr3 = file.order_lists.begin();
 		itr3 != file.order_lists.end(); ++itr3)
