@@ -597,7 +597,7 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 		{
 			stations_used[sitr->first] = true;
 			for(std::vector<std::pair<StationID, bool> >::const_iterator sitr2 = sitr;
-				sitr2 != new_ol.stations.end() && unique; ++sitr2)
+				sitr2 != sitr && unique; ++sitr2)
 					unique = unique && (sitr->first != sitr2->first);
 		}
 
