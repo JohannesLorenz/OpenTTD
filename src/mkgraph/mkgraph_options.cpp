@@ -15,8 +15,8 @@ options::options(int argc, char** argv)
 			{"version",		no_argument,		0, 'v'},
 			{"list-cargo",		no_argument,		0, 'l'},
 			{"cargo",		required_argument,	0, 'c'},
-			{"include-subsets",	no_argument,		0, 's'},
-			{"include-express",	no_argument,		0, 'e'},
+			{"hide-short-trains",	no_argument,		0, 's'},
+			{"hide-express-trains",	no_argument,		0, 'e'},
 			{0,			0,			0,  0 }
 		};
 
@@ -42,10 +42,10 @@ options::options(int argc, char** argv)
 			command = cmd_print_version;
 			break;
 		case 'e':
-			include_express = true;
+			hide_express = true;
 			break;
 		case 's':
-			include_subsets = true;
+			hide_short_trains = true;
 			break;
 		case 'c':
 		//	if(strlen(optarg) % 5 != 4)
@@ -112,13 +112,13 @@ options::options(int argc, char** argv)
 void options::usage()
 {
 	std::cerr << "usage:" << std::endl;
-	std::cerr << "\t-h, --help\t\t\tprint help and exit" << std::endl;
+	std::cerr << "\t-h, --help\t\tprint help and exit" << std::endl;
 	std::cerr << "\t-v, --version\t\tprint version and exit" << std::endl;
-	std::cerr << "\t-l, --list-cargo\t\tprint all cargo types from file and exit" << std::endl;
-	std::cerr << "\t-c, --cargo=C1,C2,...\t\tselect cargo for railnet graph" << std::endl;
-	std::cerr << "\t-s, --include-subsets\ttrains that don't run the full order list are" << std::endl;
+	std::cerr << "\t-l, --list-cargo\tprint all cargo types from file and exit" << std::endl;
+	std::cerr << "\t-c, --cargo=C1,C2,...\tselect cargo for railnet graph" << std::endl;
+	std::cerr << "\t-s, --hide-short-trains\ttrains that don't run the full order list are" << std::endl;
 	std::cerr << "\t\t\t\tnot printed as extra railyway lines" << std::endl;
-	std::cerr << "\t-e, --include-express\ttrains that stop less often are" << std::endl;
+	std::cerr << "\t-e, --hide-express-trains\ttrains that stop less often are" << std::endl;
 	std::cerr << "\t\t\t\tnot printed as extra railyway lines" << std::endl;
 }
 
