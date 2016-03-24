@@ -59,7 +59,7 @@ cat graph.dot | dot -Kneato -Tpdf > graph.pdf
 Otherwise, you can also use pipes:
 ```sh
 /where/you/installed/openttd -g ~/.openttd/save/your_savegame.sav -v graph \
-  -s null -m null | ./mkgraph.exe | dot -Kneato -Tpdf
+  -s null -m null | ./mkgraph | dot -Kneato -Tpdf
 ```
 
 # 5 Credits
