@@ -156,8 +156,6 @@ public:
 				m_destTile = CalcClosestStationTile(current_order.GetDestination(), cur_tile, current_order.IsType(OT_GOTO_STATION) ? STATION_RAIL : STATION_WAYPOINT);
 				m_dest_station_id = current_order.GetDestination();
 				m_destTrackdirs = INVALID_TRACKDIR_BIT;
-				fprintf(stderr, "SETDEST: %d, %d\n", TileX(m_destTile), TileY(m_destTile));
-
 				break;
 
 			default:
