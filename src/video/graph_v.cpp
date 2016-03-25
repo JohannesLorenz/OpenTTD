@@ -83,7 +83,9 @@ void for_all_stations_to(visited_path_t& visited, Ftor& ftor)
 	{
 		static char buf[256];
 		SetDParam(0, from->sid); GetString(buf, STR_STATION_NAME, lastof(buf));
+#ifdef DEBUG_GRAPH_YAPF
 		std::cerr << " for_all: " << buf << ", tiles:" << std::endl;
+#endif
 
 		ftor(*from);
 		if(!--max)
@@ -100,7 +102,7 @@ class GraphFtor : public StationFtor
 {
 	visited_path_t* visited_path;
 	static st_node_t* last_node;
-	bool last_station;
+	bool first_run;
 
 	enum building_type
 	{
@@ -128,14 +130,13 @@ class GraphFtor : public StationFtor
 	void _OnTile(const T& index, const TileIndex &t, const Trackdir& td, int cost,
 		building_type bt)
 	{
-		if(last_station)
+		if(first_run)
 		 last_node = NULL;
-		std::cerr << " GraphFtor: ???" << std::endl;
+
 		if(!last_node || last_node->sid != index)
 		{
-			std::cerr << " GraphFtor: ??? " << IsDepotTile(t) << std::endl;
 			st_node_t& st_node = visited_path->path[std::make_pair(t, td)];
-			if(last_station)
+			if(first_run)
 			{
 #if 0
 				loc.tile = t;
@@ -144,8 +145,10 @@ class GraphFtor : public StationFtor
 #endif
 				max_cost = cost;
 				visited_path->target = &st_node;
+#ifdef DEBUG_GRAPH_YAPF
 				std::cerr << "RECOMPUTED PATH" << std::endl;
 				std::cerr << "tile/trackdir/cost: " << t << ", " << td << ", " << cost << std::endl;
+#endif
 			}
 			else
 			{
@@ -171,7 +174,9 @@ class GraphFtor : public StationFtor
 			if(bt != bt_depot) // print station
 			{
 				SetDParam(0, index); GetString(buf, STR_STATION_NAME, lastof(buf));
+#ifdef DEBUG_GRAPH_YAPF
 				std::cerr << " GraphFtor: " << buf << ", tiles:" << std::endl;
+#endif
 				fprintf(stderr, "    %d, %d\n", TileX(t), TileY(t));
 			}
 
@@ -179,10 +184,9 @@ class GraphFtor : public StationFtor
 			if(bt == bt_station)
 			{
 				// try from this station into the reverse direction
-				if(last_station /*|| cost <= 0*/) {
-					std::cerr << "->NOCOMP: " << cost << std::endl;
-					// yapf allows "negative pentalties" for the starting tile
-					// so, we must disallow loops
+				if(first_run /*|| cost <= 0*/) {
+					// note: if there are ever problems with
+					// negative penalties, the algorithm must go here
 				}
 				else {
 					_ForAllStationsTo(train,
@@ -190,21 +194,22 @@ class GraphFtor : public StationFtor
 						visited_path, max_cost - std::max(cost, 0));
 				}
 			}
-
+#ifdef DEBUG_GRAPH_YAPF
 			if(bt != bt_depot)
 			 std::cerr << " <- GraphFtor: " << buf << std::endl;
+#endif
 
-			last_station = false;
+			first_run = false;
 		}
 	}
 public:
 //	location_data loc; //!< where + how the target is being reached
-	int max_cost; // TODO: no class variable
+	int max_cost; // FEATURE: make this a static variable??
 	const Train* train;
 	const Order& order;
 	GraphFtor(visited_path_t* v, const Train* train, const Order& order) :
 		visited_path(v),
-		last_station(true),
+		first_run(true),
 		max_cost(0),
 		train(train),
 		order(order) {
@@ -374,7 +379,7 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 			for (const Order *order = train->orders.list->GetFirstOrder();
 				order != NULL && !path_found;
 				order = order->next)
-			{ // TODO: handle depots + waypoints!
+			{
 				if (order->IsType(OT_GOTO_STATION))
 				{
 					first_order = order;
@@ -633,6 +638,7 @@ void VideoDriver_Graph::SaveStation(struct railnet_file_info& file, const struct
 	if(stations_used[st->index])
 	{
 		const TileIndex& center = st->xy; // TODO: better algorithm to find center
+		std::cerr << "Center: " << TileX(center) << ", " << TileY(center) << std::endl;
 		SetDParam(0, st->index); GetString(buf, STR_STATION_NAME, lastof(buf));
 
 		station_info tmp_station;
@@ -670,8 +676,9 @@ void VideoDriver_Graph::MainLoop()
 		UpdateWindows();
 	//}
 
-	if(!detail::is_same<CargoID, byte>::value || // TODO: cargoid -> cargolabel
-		!detail::is_same<StationID, uint16>::value)
+	if(!detail::is_same<CargoLabel, uint32>::value ||
+		!detail::is_same<StationID, uint16>::value ||
+		!detail::is_same<UnitID, uint16>::value)
 	{
 		std::cerr << "Error! Types changed in OpenTTD. "
 			"Programmers must fix this here." << std::endl;
