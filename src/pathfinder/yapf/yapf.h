@@ -106,6 +106,7 @@ public:
 	template<class T>
 	void operator()(const T& building, const TileIndex& t, const Trackdir& td, int cost) {
 		OnTile(building, t, td, cost); }
+	virtual ~StationFtor() = 0;
 };
 
 /**

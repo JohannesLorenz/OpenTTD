@@ -202,19 +202,28 @@ public:
 		// times_t: offset, char: direction mask
 		std::multimap<UnitID, super_info_t> supersets;
 
-		// find first and second node where the train stops
-		const node_info_t *station_0 = &nodes.at(stations[0]),
-			*station_1 = &nodes.at(stations[1]);
+		// find first node where the train stops
+		const node_info_t *station_0 = &nodes.at(stations[0]);
 
 		// fill map for the first node
 		for(const auto& pr : *station_0)
-		 if(pr.first != train) // TODO: cargo
-		  supersets.emplace(pr.first, super_info_t { pr.second, dir_none, 0, true });
+		if(pr.first != train)
+		{
+			const auto& c_oth = cargo.at(pr.first);
+			const auto& c_this = cargo.at(train);
+			if(std::includes(c_oth.begin(), c_oth.end(), c_this.begin(), c_this.end()))
+			 supersets.emplace(pr.first, super_info_t { pr.second, dir_none, 0, true });
+		}
 
 		for(const auto& pr : *station_0)
-		 if(pr.first != train)
-		  if(value_of(supersets, pr.first, station_0->find(pr.first)->second) != 0)
-		   throw "Internal error: invalid value computation";
+		if(pr.first != train)
+		{
+			const auto& c_oth = cargo.at(pr.first);
+			const auto& c_this = cargo.at(train);
+			if(std::includes(c_oth.begin(), c_oth.end(), c_this.begin(), c_this.end()))
+			if(value_of(supersets, pr.first, station_0->find(pr.first)->second) != 0)
+			 throw "Internal error: invalid value computation";
+		}
 
 		// follow the order list, find monotonically increasing superset line
 		for(auto itr = stations.begin() + 1; itr != stations.end(); ++itr)

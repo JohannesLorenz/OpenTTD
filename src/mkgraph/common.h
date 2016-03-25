@@ -20,7 +20,6 @@ typedef uint8_t byte;
 typedef uint16_t uint16;
 typedef uint32_t uint32;
 typedef uint16 StationID;
-typedef byte CargoID;
 typedef uint16 UnitID; // TODO: remove or type assertion
 typedef uint32 CargoLabel;
 #else
