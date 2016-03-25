@@ -176,8 +176,8 @@ class GraphFtor : public StationFtor
 				SetDParam(0, index); GetString(buf, STR_STATION_NAME, lastof(buf));
 #ifdef DEBUG_GRAPH_YAPF
 				std::cerr << " GraphFtor: " << buf << ", tiles:" << std::endl;
+				std::cerr << "    " << TileX(t) << ", " << TileY(t) << std::endl;
 #endif
-				fprintf(stderr, "    %d, %d\n", TileX(t), TileY(t));
 			}
 
 			// simulate turnaround in stations
@@ -270,9 +270,10 @@ struct DumpStation
 		{
 			static char buf[256];
 			SetDParam(0, node.sid); GetString(buf, STR_STATION_NAME, lastof(buf));
+#ifdef DEBUG_GRAPH_YAPF
 			std::cerr << " (-> Station): " << buf << ", tiles:" << std::endl;
-
-			fprintf(stderr, "    %d, %d\n", TileX(node.tile), TileY(node.tile));
+			srd::cerr << "    " << TileX(node.tile) << ", " << TileY(node.tile) << std::endl;
+#endif
 		}
 	}
 } dump_station;
@@ -332,10 +333,16 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 	if(!train->orders.list)
 	 return;
 
+#ifdef DEBUG_GRAPH
+	std::cerr << "NEXT TRAIN: " << train->unitnumber << std::endl;
+#endif
+
 	/*
 		basically fill new order list
 	*/
+#ifdef DEBUG_GRAPH_CARGO
 	std::cerr << "cargo: ";
+#endif
 	for (Vehicle *v = train->orders.list->GetFirstSharedVehicle(); v != NULL; v = v->Next())
 	{
 		if(v->cargo_cap) {
@@ -343,15 +350,19 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 			{
 				CargoLabel lbl = CargoSpec::Get(v->cargo_type)->label;
 				new_ol.cargo.insert(lbl);
+#ifdef DEBUG_GRAPH_CARGO
 				std::cerr << " " << (char)(lbl >> 24)
 					<< (char)((lbl >> 16) & 0xFF)
 					<< (char)((lbl >> 8) & 0xFF)
 					<< (char)(lbl & 0xFF)
 					;
+#endif
 			}
 		}
 	}
+#ifdef DEBUG_GRAPH_CARGO
 	std::cerr << std::endl;
+#endif
 
 	std::set<const OrderList*> order_lists_done;
 
@@ -362,7 +373,7 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 		const OrderList* cur_ol = train->orders.list;
 		if(!cur_ol)
 		 return;
-		std::cerr << "NEXT TRAIN: " << train->unitnumber << std::endl;
+
 		if(	train->IsFrontEngine()
 			&& cur_ol->GetFirstOrder() != NULL // don't add empty orders
 			&& order_lists_done.find(cur_ol) == order_lists_done.end())
@@ -386,19 +397,22 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 
 					StationID sid = (StationID)order->GetDestination();
 					SetDParam(0, sid); GetString(buf, STR_STATION_NAME, lastof(buf));
+#ifdef DEBUG_GRAPH_YAPF
 					std::cerr << "Pre-Heading (trying) for station: " << buf << std::endl;
-
+#endif
 					path_found = ForAllStationsTo(train, location_data(),
 						*order, &visited_path);
 					if(path_found)
 					{
 						recent_loc = *visited_path.target;
-						std::cerr << "Found: " << recent_loc.tile << " / "
-							<< recent_loc.dir << std::endl;
+
 						StationID sid2 = (StationID)order->GetDestination();
 						SetDParam(0, sid2); GetString(buf, STR_STATION_NAME, lastof(buf));
-						std::cerr << "Found: " << buf << std::endl;
-
+#ifdef DEBUG_GRAPH_YAPF
+						std::cerr << "  Found: " << buf << ": "
+							<< recent_loc.tile << " / "
+							<< recent_loc.dir <<<<  std::endl;
+#endif
 						first_found_order = order;
 					}
 				}
@@ -409,8 +423,6 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 
 			// virtually drive once around to get the right track direction
 			{
-				std::cerr << "Still: " << recent_loc.tile
-						<< " / " << recent_loc.dir << std::endl;
 				bool go_on = true;
 				std::size_t round = 0;
 				for (const Order *order = cur_ol->GetNext(first_found_order); go_on; order = cur_ol->GetNext(order))
@@ -418,13 +430,17 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 				{
 					StationID sid = (StationID)order->GetDestination();
 					SetDParam(0, sid); GetString(buf, STR_STATION_NAME, lastof(buf));
+#ifdef DEBUG_GRAPH_YAPF
 					std::cerr << "Pre-Heading for station: " << buf << std::endl;
 					std::cerr << "Recent loc: " << recent_loc.tile
 						<< " / " << recent_loc.dir << std::endl;
+#endif
 					path_found = ForAllStationsTo(train, recent_loc, *order,
 						&visited_path);
 					for_all_stations_to(visited_path, dump_station);
+#ifdef DEBUG_GRAPH_YAPF
 					std::cerr << "path found? " << path_found << std::endl;
+#endif
 					recent_loc = *visited_path.target;
 
 					if(order == first_order && round)
@@ -446,16 +462,18 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 				{
 					StationID sid = (StationID)order->GetDestination();
 					SetDParam(0, sid); GetString(buf, STR_STATION_NAME, lastof(buf));
+#ifdef DEBUG_GRAPH_YAPF
 					std::cerr << "Heading for station: " << buf << std::endl;
-
+#endif
 					path_found = ForAllStationsTo(train, recent_loc,
 						*order, &visited_path);
 
 					AddStation add_stations(order->GetNonStopType(), visited_path, &new_ol);
 					for_all_stations_to(visited_path, add_stations);
 					recent_loc = *visited_path.target;
+#ifdef DEBUG_GRAPH_YAPF
 					std::cerr << "path found? " << path_found << std::endl;
-
+#endif
 
 					ok = ok && path_found;
 				}
@@ -471,6 +489,7 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 			} // scope
 
 			if(!path_found) {
+				// FEATURE: check if whole shared order list not found
 				std::cerr << "Warning: path for train #" << train->unitnumber << " not found" << std::endl;
 				return;
 			}
@@ -638,7 +657,7 @@ void VideoDriver_Graph::SaveStation(struct railnet_file_info& file, const struct
 	if(stations_used[st->index])
 	{
 		const TileIndex& center = st->xy; // TODO: better algorithm to find center
-		std::cerr << "Center: " << TileX(center) << ", " << TileY(center) << std::endl;
+	//	std::cerr << "Center: " << TileX(center) << ", " << TileY(center) << std::endl;
 		SetDParam(0, st->index); GetString(buf, STR_STATION_NAME, lastof(buf));
 
 		station_info tmp_station;

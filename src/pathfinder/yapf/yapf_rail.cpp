@@ -539,23 +539,24 @@ public:
 			PBSTileInfo origin = FollowTrainReservation(v);
 			orig = origin.tile;
 			orig_dir = origin.trackdir;
+#ifdef DEBUG_GRAPH_YAPF
 			fprintf(stderr, "SET ORIGIN FROM TRAIN: %d, %d", TileX(orig), TileY(orig));
+#endif
 		}
 		else
+		{
+#ifdef DEBUG_GRAPH_YAPF
 		 fprintf(stderr, "SET ORIGIN: %d, %d", TileX(orig), TileY(orig));
+#endif
+		}
 
 		Yapf().SetOrigin(orig, orig_dir, INVALID_TILE, INVALID_TRACKDIR, 1, true);
 
-		TileIndex dest_tile = INVALID_TILE;
-		if(current_order.GetType() != OT_GOTO_STATION && current_order.GetType() != OT_GOTO_WAYPOINT)
+		if(current_order.GetType() != OT_GOTO_STATION
+			&& current_order.GetType() != OT_GOTO_WAYPOINT
+			&& current_order.GetType() != OT_GOTO_DEPOT)
 		{
-			if(current_order.GetType() == OT_GOTO_DEPOT)
-			{
-				DepotID id = current_order.GetDestination();
-				dest_tile = Depot::Get(id)->xy;
-			}
-			else
-			 return;
+			return; // no yet handled
 		}
 
 		Yapf().SetDestination(current_order, v->tile, INVALID_TILE,

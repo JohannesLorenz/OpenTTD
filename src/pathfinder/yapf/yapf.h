@@ -109,6 +109,8 @@ public:
 	virtual ~StationFtor() = 0;
 };
 
+inline StationFtor::~StationFtor() {}
+
 /**
  * Finds the best path for given train using YAPF and
  * executes a @a StationFtor for each station to target, in reverse order
