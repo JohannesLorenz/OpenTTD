@@ -1,6 +1,7 @@
 #include "../stdafx.h"
 
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include <set>
 #include <algorithm>
@@ -326,7 +327,8 @@ struct AddStation : DumpStation
 };
 
 void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList* _ol,*/const Train* train,
-	std::vector<bool>& stations_used, std::set<CargoLabel>& cargo_used) const
+	std::vector<bool>& stations_used, std::set<CargoLabel>& cargo_used,
+	std::set<const OrderList*>& order_lists_done) const
 {
 	order_list new_ol;
 
@@ -363,8 +365,6 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 #ifdef DEBUG_GRAPH_CARGO
 	std::cerr << std::endl;
 #endif
-
-	std::set<const OrderList*> order_lists_done;
 
 	{
 
@@ -406,7 +406,7 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 					{
 						recent_loc = *visited_path.target;
 
-						StationID sid2 = (StationID)order->GetDestination();
+						StationID sid2 = (StationID)order->GetDestination(); // TODO: function st_name()
 						SetDParam(0, sid2); GetString(buf, STR_STATION_NAME, lastof(buf));
 #ifdef DEBUG_GRAPH_YAPF
 						std::cerr << "  Found: " << buf << ": "
@@ -489,8 +489,7 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 			} // scope
 
 			if(!path_found) {
-				// FEATURE: check if whole shared order list not found
-				std::cerr << "Warning: path for train #" << train->unitnumber << " not found" << std::endl;
+				// must be left out... warning will be printed in run()
 				return;
 			}
 
@@ -711,16 +710,50 @@ void VideoDriver_Graph::MainLoop()
 	stations_used.resize(_station_pool.size, false);
 
 	const Train* train;
-	FOR_ALL_TRAINS(train) { SaveOrderList(file, train, stations_used, cargo_used); }
+	std::size_t n_trains = 0, cur_train = 0;
+	FOR_ALL_TRAINS(train) {
+		(void) train;
+		++ n_trains;
+	}
+
+	std::set<const OrderList*> order_lists_done;
+	std::cerr << "Calculating order lists... ";
+	FOR_ALL_TRAINS(train) {
+		std::cerr << std::setw(3) << cur_train*100/n_trains << "%";
+		SaveOrderList(file, train, stations_used, cargo_used, order_lists_done);
+		std::cerr << "\b\b\b\b";
+		++cur_train;
+	}
+	std::cerr << std::endl;
+
+	// did we forget any order list?
+	bool any_problems = false;
+	FOR_ALL_TRAINS(train) {
+		if(order_lists_done.find(train->orders.list) == order_lists_done.end()) {
+			std::cerr << "Warning: Could not compute order list for train #"
+				<< train->unitnumber << std::endl;
+			any_problems = true;
+		}
+	}
+	if(any_problems)
+	 std::cerr << "Warning: Some trains' order lists could not be computed\n" << std::endl
+		<< "and will be left out. This often means that" << std::endl
+		<< "a train's order list contains stations A and B" << std::endl
+		<< "where B could not be found reachable from A." << std::endl
+		<< "Hint: make sure that all stations *requiring* turnarounds" << std::endl
+		<< "have *explicit* orders" << std::endl;
+
 
 	const BaseStation* st;
+	std::cerr << "Calculating stations...";
 	FOR_ALL_BASE_STATIONS(st) { SaveStation(file, st, stations_used); }
 
 	/*const CargoSpec* carg;
 	FOR_ALL_CARGOSPECS(carg) { SaveCargoSpec(file, carg); }*/
+	std::cerr << "Calculating cargo labels...";
 	SaveCargoLabels(file, cargo_used);
 
-	std::cerr << "serializing " << file.order_lists.size() << " order lists..." << std::endl;
+	std::cerr << "Serializing " << file.order_lists.size() << " order lists..." << std::endl;
 	serialize(file, std::cout);
 }
 

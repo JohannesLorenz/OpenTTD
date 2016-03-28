@@ -14,6 +14,7 @@
 
 #include "../../train.h"
 #include "../../pbs.h"
+#include "../pathfinder_func.h"
 
 class CYapfDestinationRailBase {
 protected:
