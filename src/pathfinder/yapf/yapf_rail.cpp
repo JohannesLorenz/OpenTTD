@@ -546,7 +546,7 @@ public:
 		else
 		{
 #ifdef DEBUG_GRAPH_YAPF
-		 fprintf(stderr, "SET ORIGIN: %d, %d", TileX(orig), TileY(orig));
+			fprintf(stderr, "SET ORIGIN: %d, %d", TileX(orig), TileY(orig));
 #endif
 		}
 
@@ -577,7 +577,6 @@ public:
 
 			/* path was found or at least suggested
 			 * walk through the path back to the origin */
-			Node *pPrev = NULL;
 			//StationID recent_station = INVALID_STATION;
 
 			all_tiles_t all_tiles(ftor/*, pNode->m_cost, recent_station*/);
@@ -589,7 +588,6 @@ public:
 			//	if(all_tiles.found_station != INVALID_STATION)
 			//	 recent_station = all_tiles.found_station;
 
-				pPrev = pNode;
 				pNode = pNode->m_parent;
 			}
 
