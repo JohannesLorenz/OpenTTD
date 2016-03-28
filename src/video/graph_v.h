@@ -9,7 +9,7 @@ typedef uint32 CargoLabel; // forward declaration
 class VideoDriver_Graph : public VideoDriver_Null
 {
 	void SaveOrderList(struct railnet_file_info& file, const Train *train,
-		std::vector<bool> &stations_used, std::set<CargoLabel> &cargo_used) const;
+		std::vector<bool> &stations_used, std::set<CargoLabel> &cargo_used, std::set<const OrderList *> &order_lists_done) const;
 	void SaveStation(struct railnet_file_info& file, const struct BaseStation* st,
 		const std::vector<bool> &stations_used) const;
 	void SaveCargoSpec(struct railnet_file_info& file, const struct CargoSpec* carg) const;
