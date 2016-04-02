@@ -120,7 +120,8 @@ inline StationFtor::~StationFtor() {}
  * @param ftor     station functor to be executed along the best path in reverse order
  */
 void YapfTrainStationsToTarget(const Train *v, bool &path_found, struct PBSTileInfo *target,
-	StationFtor& ftor, TileIndex orig, Trackdir orig_dir, const struct Order &current_order, int best_cost);
+	StationFtor& ftor, TileIndex orig, Trackdir orig_dir, const struct Order &current_order, int best_cost,
+	bool try_reverse = true);
 
 
 #endif /* YAPF_H */
