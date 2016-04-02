@@ -97,7 +97,8 @@ void for_all_stations_to(visited_path_t& visited, Ftor& ftor)
 }
 
 bool _ForAllStationsTo(const Train *train, location_data location, const Order& order,
-	visited_path_t* visited_path, int best_cost = std::numeric_limits<int>::max());
+	visited_path_t* visited_path, int best_cost = std::numeric_limits<int>::max(),
+	bool try_reverse = true);
 
 class GraphFtor : public StationFtor
 {
@@ -192,7 +193,7 @@ class GraphFtor : public StationFtor
 				else {
 					_ForAllStationsTo(train,
 						location_data(t, ReverseTrackdir(td)), order,
-						visited_path, max_cost - std::max(cost, 0));
+						visited_path, max_cost - std::max(cost, 0), false);
 				}
 			}
 #ifdef DEBUG_GRAPH_YAPF
@@ -221,15 +222,14 @@ public:
 st_node_t* GraphFtor::last_node = NULL;
 
 bool _ForAllStationsTo(const Train* train, location_data location, const Order& order,
-	visited_path_t* visited_path, int best_cost)
+	visited_path_t* visited_path, int best_cost, bool try_reverse)
 {
 	bool path_found;
 	PBSTileInfo target;
 
 	GraphFtor graphf(visited_path, train, order);
-
 	YapfTrainStationsToTarget(train, path_found, &target, graphf,
-		location.tile, location.dir, order, best_cost);
+		location.tile, location.dir, order, best_cost, try_reverse);
 
 	return path_found;
 }
@@ -237,9 +237,11 @@ bool _ForAllStationsTo(const Train* train, location_data location, const Order& 
 bool ForAllStationsTo(const Train* train, location_data location, const Order& order,
 	visited_path_t* visited_path, int best_cost = std::numeric_limits<int>::max())
 {
+	return _ForAllStationsTo(train, location, order, visited_path, best_cost);
+#if 0
 	if(!_ForAllStationsTo(train, location, order, visited_path, best_cost))
 	{
-		// we only reverse on GraphFtor::OnStationTile, so if
+		// we only reverse on GraphFtor::OnTile, so if
 		// GraphFtor::OnStationTile never gets reached, we have to try reversing
 		// at the starting position
 
@@ -258,6 +260,7 @@ bool ForAllStationsTo(const Train* train, location_data location, const Order& o
 		}
 	}
 	return true;
+#endif
 }
 
 struct DumpStation
@@ -729,10 +732,15 @@ void VideoDriver_Graph::MainLoop()
 	// did we forget any order list?
 	bool any_problems = false;
 	FOR_ALL_TRAINS(train) {
+		if(train->IsEngine())
+		{
 		if(order_lists_done.find(train->orders.list) == order_lists_done.end()) {
 			std::cerr << "Warning: Could not compute order list for train #"
 				<< train->unitnumber << std::endl;
 			any_problems = true;
+		}
+	//	else
+	//		std::cerr << "Train #" << train->unitnumber << " is ok." << std::endl;
 		}
 	}
 	if(any_problems)
