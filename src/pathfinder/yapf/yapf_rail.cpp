@@ -467,11 +467,19 @@ public:
 
 	static void stStationsToTarget(const Train *v, bool &path_found, PBSTileInfo *target,
 		StationFtor& ftor, TileIndex orig, Trackdir orig_dir,
-		const Order& current_order, int best_cost)
+		const Order& current_order, int best_cost, bool try_reverse)
 	{
-		Tpf pf1;
-		pf1.StationsToTarget(v, path_found, target, ftor,
-			orig, orig_dir, current_order, best_cost);
+		{
+			Tpf pf1;
+			pf1.StationsToTarget(v, path_found, target, ftor,
+				orig, orig_dir, current_order, best_cost);
+		}
+		if(try_reverse && !path_found)
+		{
+			Tpf pf2;
+			pf2.StationsToTarget(v, path_found, target, ftor,
+				orig, orig_dir, current_order, best_cost, true);
+		}
 	}
 
 	struct all_tiles_t
@@ -530,7 +538,7 @@ public:
 
 	inline void StationsToTarget(const Train *v, bool &path_found, PBSTileInfo *target,
 		StationFtor& ftor, TileIndex orig, Trackdir orig_dir,
-		const Order& current_order, int best_cost)
+		const Order& current_order, int best_cost, bool force_reverse = false)
 	{
 		if (target != NULL) target->tile = INVALID_TILE;
 
@@ -550,6 +558,9 @@ public:
 #endif
 		}
 
+		if(force_reverse)
+		 orig_dir = ReverseTrackdir(orig_dir);
+
 		Yapf().SetOrigin(orig, orig_dir, INVALID_TILE, INVALID_TRACKDIR, 1, true);
 
 		if(current_order.GetType() != OT_GOTO_STATION
@@ -564,13 +575,6 @@ public:
 
 		/* find the best path */
 		path_found = Yapf().FindPath(v);
-
-		if(!path_found)
-		{
-			Yapf().SetOrigin(orig, ReverseTrackdir(orig_dir),
-				INVALID_TILE, INVALID_TRACKDIR, 1, true);
-			path_found = Yapf().FindPath(v);
-		}
 
 		Node *pNode = Yapf().GetBestNode();
 		if (path_found && pNode != NULL && pNode->m_cost < best_cost) {
@@ -777,10 +781,10 @@ bool YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, b
 }
 
 void YapfTrainStationsToTarget(const Train *v, bool &path_found, PBSTileInfo *target, StationFtor& ftor,
-	TileIndex orig, Trackdir orig_dir, const Order& current_order, int best_cost)
+	TileIndex orig, Trackdir orig_dir, const Order& current_order, int best_cost, bool try_reverse)
 {
 	typedef void (*PfnStationsToTarget)(const Train*, bool&, PBSTileInfo*, StationFtor&,
-		TileIndex, Trackdir, const Order&, int);
+		TileIndex, Trackdir, const Order&, int, bool);
 	PfnStationsToTarget pfnStationsToTarget = &CYapfRail1::stStationsToTarget;
 
 	/* check if non-default YAPF type needed */
@@ -788,7 +792,8 @@ void YapfTrainStationsToTarget(const Train *v, bool &path_found, PBSTileInfo *ta
 		pfnStationsToTarget = &CYapfRail2::stStationsToTarget;
 	}
 
-	pfnStationsToTarget(v, path_found, target, ftor, orig, orig_dir, current_order, best_cost);
+	pfnStationsToTarget(v, path_found, target, ftor, orig, orig_dir, current_order, best_cost,
+		try_reverse);
 }
 
 /** if any track changes, this counter is incremented - that will invalidate segment cost cache */
