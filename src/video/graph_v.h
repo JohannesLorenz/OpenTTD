@@ -12,7 +12,6 @@ class VideoDriver_Graph : public VideoDriver_Null
 		std::vector<bool> &stations_used, std::set<CargoLabel> &cargo_used, std::set<const OrderList *> &order_lists_done) const;
 	void SaveStation(struct railnet_file_info& file, const struct BaseStation* st,
 		const std::vector<bool> &stations_used) const;
-	void SaveCargoSpec(struct railnet_file_info& file, const struct CargoSpec* carg) const;
 	void SaveCargoLabels(railnet_file_info &file, std::set<CargoLabel> &s) const;
 public:
 	VideoDriver_Graph();
