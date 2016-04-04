@@ -28,7 +28,7 @@ void _rd(std::istream& i, char* raw, std::size_t sz) {
 bool order_list::operator<(const order_list &other) const
 {
 	return (min_station == other.min_station)
-		? stations.size() < other.stations.size()
+		? real_stations < other.real_stations
 		: min_station < other.min_station;
 }
 

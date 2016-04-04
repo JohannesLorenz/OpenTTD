@@ -130,7 +130,6 @@ public:
 			std::size_t new_last_station_no = std::numeric_limits<std::size_t>::max();
 
 			const auto in_nodes = info.equal_range(cur_line);
-			std::size_t value_of_last_station = last_station_no; // TODO: useless variable
 			std::size_t tmp = lengths.at(cur_line);
 			for(auto in_node = in_nodes.first;
 				in_node != in_nodes.second; ++in_node)
@@ -138,7 +137,7 @@ public:
 				tmp = value_of(supersets, cur_line, in_node->second);
 				if(tmp == 0)
 				 tmp = lengths.at(cur_line);
-				if(tmp >= value_of_last_station && // is it a future node?
+				if(tmp >= last_station_no && // is it a future node?
 					tmp < new_last_station_no /* better than previous result? */ )
 				{
 					new_last_station_no = tmp;
@@ -155,16 +154,14 @@ public:
 					nodes.at(*itr_1).equal_range(cur_line);
 
 				bool no_express = true;
-				// TODO: < value_of(new_last...)?
-				if(value_of_last_station < new_last_station_no - 1) // some nodes between...
+				if(last_station_no < new_last_station_no - 1) // some nodes between...
 				{
 					no_express = false;
 					for(auto last_in_node = last_in_nodes.first;
 						(!no_express) && last_in_node != last_in_nodes.second; ++last_in_node)
 					{
 						std::size_t value_found_in_last = value_of(supersets, cur_line, last_in_node->second);
-						if(value_of_last_station < value_found_in_last
-							// TODO: < value_of(new_last...)?
+						if(last_station_no < value_found_in_last
 							&& value_found_in_last < new_last_station_no)
 						{
 							// ok, it was just a slope we've left out
@@ -272,10 +269,23 @@ int run(const options& opt)
 	if(cargo_ids.size() != (opt.cargo.length()+1)/5)
 	 throw "not all of your cargos are known";
 
-	std::map<StationID, int> station_flags;
-
-	// TODO: remove wrong cargo from order list already here!
-
+	/*
+		remove unwanted cargo from list
+	*/
+	{
+	std::multiset<order_list>::iterator itr, next;
+	for(itr = next = file.order_lists.begin();
+		itr != file.order_lists.end(); itr = next)
+	{
+		++next;
+		bool cargo_found = false;
+		for(std::set<CargoLabel>::const_iterator itr2 = itr->cargo.begin();
+			!cargo_found && itr2 != itr->cargo.end(); ++itr2)
+		 cargo_found = (cargo_ids.find(*itr2) != cargo_ids.end());
+		if(!cargo_found)
+		 file.order_lists.erase(itr);
+	}
+	}
 
 	/*
 		sort out subset or express trains
@@ -299,25 +309,17 @@ int run(const options& opt)
 		}
 	}
 
+	std::map<StationID, int> station_flags;
 	/*
 		find out which stations are actually being used...
 	*/
 	// only set flags
-	for(std::multiset<order_list>::iterator itr = file.order_lists.begin();
+	for(std::multiset<order_list>::const_iterator itr = file.order_lists.begin();
 		itr != file.order_lists.end(); ++itr)
 	{
-		{
-			bool cargo_found = false;
-			for(std::set<CargoLabel>::const_iterator itr2 = itr->cargo.begin();
-				!cargo_found && itr2 != itr->cargo.end(); ++itr2)
-			 cargo_found = (cargo_ids.find(*itr2) != cargo_ids.end());
-			if(!cargo_found)
-			 continue;
-		}
-
 		if(itr->stations.size())
 		{
-			order_list& ol = const_cast<order_list&>(*itr); // TODO: no const (see for loop)
+			const order_list& ol = *itr; // TODO: no const (see for loop)
 			for(std::vector<std::pair<StationID, bool> >::const_iterator
 					itr = ol.stations.begin();
 					itr != ol.stations.end(); ++itr)
@@ -378,35 +380,15 @@ int run(const options& opt)
 	/*
 		draw edges
 	*/
-	// TODO: container that visits begin() before end()
 	for(std::multiset<order_list>::const_iterator itr3 = file.order_lists.begin();
 		itr3 != file.order_lists.end(); ++itr3)
 	{
-		{
-			bool cargo_found = false;
-	/*		std::cerr << "cargo: ";
-			for(std::set<CargoID>::const_iterator itr2 = itr3->cargo.begin();
-				itr2 != itr3->cargo.end(); ++itr2)
-					std::cerr << " " << +*itr2;
-			std::cerr << std::endl;*/
-
-			for(std::set<CargoLabel>::const_iterator itr2 = itr3->cargo.begin();
-				!cargo_found && itr2 != itr3->cargo.end(); ++itr2)
-			 cargo_found = (cargo_ids.find(*itr2) != cargo_ids.end());
-
-			std::cerr << "order: " << itr3->unit_number << std::endl;
-			if(!cargo_found)
-			 std::cerr << "not found" << std::endl;
-			if(!cargo_found)
-			 continue;
-		}
-
 		hue = fmod(hue += order_list_step, 1.0f);
 		value = fmod(value += order_list_step_2, 1.0f);
 
 		if(itr3->stations.size())
 		{
-			const order_list& ol = *itr3; // TODO: no const (see for loop)
+			const order_list& ol = *itr3;
 			bool only_double_edges = ol.is_bicycle;
 			std::size_t double_edges = 0;
 			std::size_t mid = ol.stations.size() >> 1;
