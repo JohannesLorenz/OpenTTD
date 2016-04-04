@@ -37,9 +37,11 @@ struct order_list
 	StationID min_station;
 	std::set<CargoLabel> cargo; // cargo order and amount does not matter
 	std::vector<std::pair<StationID, bool> > stations;
+	std::size_t real_stations;
 	bool operator<(const order_list& other) const;
 	order_list() : is_cycle(false), is_bicycle(false),
-		min_station(std::numeric_limits<StationID>::max())
+		min_station(std::numeric_limits<StationID>::max()),
+		real_stations(0)
 	{
 	}
 };

@@ -270,15 +270,15 @@ struct DumpStation
 		if(node.tile == INVALID_TILE || node.dir == INVALID_TRACKDIR)
 		 throw "Internal error";
 
+#ifdef DEBUG_GRAPH_YAPF
 		if(node.sid != INVALID_STATION)
 		{
 			static char buf[256];
 			SetDParam(0, node.sid); GetString(buf, STR_STATION_NAME, lastof(buf));
-#ifdef DEBUG_GRAPH_YAPF
 			std::cerr << " (-> Station): " << buf << ", tiles:" << std::endl;
 			srd::cerr << "    " << TileX(node.tile) << ", " << TileY(node.tile) << std::endl;
-#endif
 		}
+#endif
 	}
 } dump_station;
 
@@ -291,8 +291,11 @@ struct AddStation : DumpStation
 	void add_node(const st_node_t& node, bool stops) const {
 		const StationID sid = node.sid;
 		if(new_ol->stations.empty() || sid != new_ol->stations.back().first)
-		 new_ol->stations.push_back(std::make_pair(sid, stops));
-		new_ol->min_station = std::min(new_ol->min_station, sid);
+		{
+			new_ol->stations.push_back(std::make_pair(sid, stops));
+			if(stops)
+			 new_ol->min_station = std::min(new_ol->min_station, sid);
+		}
 	}
 
 	void operator()(const st_node_t& node) const
@@ -514,9 +517,11 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 		 return; // only useless cases
 	}
 
-//	if(new_ol.stations.size())
-//	 if(new_ol.stations.back() == new_ol.stations.front())
-//	  new_ol.stations.pop_back();
+
+	for(std::vector<std::pair<StationID, bool> >::const_iterator itr
+		= new_ol.stations.begin();
+		itr != new_ol.stations.end(); ++itr)
+	 new_ol.real_stations += itr->second;
 
 	typedef std::multiset<order_list>::iterator it;
 	std::pair<it, it> itrs = file.order_lists.equal_range(new_ol);
@@ -527,7 +532,7 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 	{
 		// from the multiset, we can assume:
 		// min_station == other.min_station
-		// station.size() == other.station_size()
+		// real_stations == other.real_stations
 
 		// g++ disabled this because modifying the element might
 		// change the correct order. however, we do only changes
@@ -573,38 +578,38 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 				}
 				else
 				{
-					// case 2: the next stations of the new line and of the old line
-					//	sum up to *one* bidirectional circle
-					// don't insert, but add bidirectional edges (if required)
-				//	if(already_added.is_bicycle || already_added.is_cycle)
-				//	{
-						// must be either the same direction
-						// (then same_order was already true)
-						// or the opposite direction
-						// => it must be the opposite direction
-
-						bool equal = true;
-						// TODO: must care about passed stations here!
-						/*for(; cur_new < already_added.stations.size();
-							++cur_new,
-							cur_old = (cur_old == 0) ? (already_added.stations.size() - 1) : (cur_old - 1))
-							equal = equal && (already_added.stations[cur_old] == new_ol.stations[cur_new]);*/
-						for(std::size_t i = 0; i < sz; ++i)
-							equal = equal && (new_ol.stations[i]
-								== already_added.stations[(start_found+sz-i)%sz]);
-
-						if(equal)
+					// check if it's the opposite order
+					bool equal = true;
+					int j = start_found;
+					for(int i = 0; i < (int)sz; ++i)
+					{
+						if(new_ol.stations[i].second)
 						{
-							if(already_added.is_cycle) {
-								already_added.is_cycle = false;
-								already_added.is_bicycle = true;
+							bool finished = false;
+							for(; !finished; --j)
+							{
+								const std::pair<StationID, bool>& other_stn
+									= already_added.stations[(j+sz)%sz];
+								if(other_stn.second)
+								{
+									equal = equal && (new_ol.stations[i].first
+										== other_stn.first);
+									finished = true;
+								}
 							}
-							// for bicycle, no need to add another
-							// for non-cylce, no need to add anything
-							this_is_a_new_line = false;
 						}
-				//	}
+					}
 
+					if(equal)
+					{
+						if(already_added.is_cycle) {
+							already_added.is_cycle = false;
+							already_added.is_bicycle = true;
+						}
+						// for bicycle, no need to add another
+						// for non-cylce, no need to add anything
+						this_is_a_new_line = false;
+					}
 				}
 			}
 		}
@@ -658,8 +663,7 @@ void VideoDriver_Graph::SaveStation(struct railnet_file_info& file, const struct
 	static char buf[256];
 	if(stations_used[st->index])
 	{
-		const TileIndex& center = st->xy; // TODO: better algorithm to find center
-	//	std::cerr << "Center: " << TileX(center) << ", " << TileY(center) << std::endl;
+		const TileIndex& center = st->train_station.GetCenterTile();
 		SetDParam(0, st->index); GetString(buf, STR_STATION_NAME, lastof(buf));
 
 		station_info tmp_station;
@@ -668,18 +672,6 @@ void VideoDriver_Graph::SaveStation(struct railnet_file_info& file, const struct
 		tmp_station.y = coord_of(MapSizeY() - TileY(center));
 		file.stations.insert(std::make_pair(st->index, tmp_station));
 	}
-}
-
-void VideoDriver_Graph::SaveCargoSpec(railnet_file_info &file, const CargoSpec *carg) const
-{
-/*	static char buf[256];
-	int count = 0;
-	if(carg->IsValid())
-	{
-	//	SetDParam(0, 1 << carg->Index()); GetString(buf, STR_JUST_CARGO_LIST, lastof(buf));
-	//	file.cargo_names.insert(std::make_pair(carg->Index(), buf));
-		file.cargo_names.insert(std::make_pair(++count, ));
-	}*/
 }
 
 void VideoDriver_Graph::SaveCargoLabels(railnet_file_info &file, std::set<CargoLabel>& s) const
@@ -732,33 +724,26 @@ void VideoDriver_Graph::MainLoop()
 	// did we forget any order list?
 	bool any_problems = false;
 	FOR_ALL_TRAINS(train) {
-		if(train->IsEngine())
-		{
-		if(order_lists_done.find(train->orders.list) == order_lists_done.end()) {
-			std::cerr << "Warning: Could not compute order list for train #"
-				<< train->unitnumber << std::endl;
-			any_problems = true;
-		}
-	//	else
-	//		std::cerr << "Train #" << train->unitnumber << " is ok." << std::endl;
+		if(train->IsFrontEngine() && train->orders.list &&
+			order_lists_done.find(train->orders.list) == order_lists_done.end()) {
+				std::cerr << "Warning: Could not compute order list for train #"
+					<< train->unitnumber << std::endl;
+				any_problems = true;
 		}
 	}
 	if(any_problems)
-	 std::cerr << "Warning: Some trains' order lists could not be computed\n" << std::endl
-		<< "and will be left out. This often means that" << std::endl
-		<< "a train's order list contains stations A and B" << std::endl
-		<< "where B could not be found reachable from A." << std::endl
-		<< "Hint: make sure that all stations *requiring* turnarounds" << std::endl
-		<< "have *explicit* orders" << std::endl;
-
+	 std::cerr << "Warning: Some trains' order lists could not be computed" << std::endl
+		<< "  and will be left out. This often means that" << std::endl
+		<< "  a train's order list contains stations A and B" << std::endl
+		<< "  where B could not be found reachable from A." << std::endl
+		<< "  Hint: make sure that all stations *requiring* turnarounds" << std::endl
+		<< "  have *explicit* orders." << std::endl;
 
 	const BaseStation* st;
-	std::cerr << "Calculating stations...";
+	std::cerr << "Calculating stations..." << std::endl;
 	FOR_ALL_BASE_STATIONS(st) { SaveStation(file, st, stations_used); }
 
-	/*const CargoSpec* carg;
-	FOR_ALL_CARGOSPECS(carg) { SaveCargoSpec(file, carg); }*/
-	std::cerr << "Calculating cargo labels...";
+	std::cerr << "Calculating cargo labels..." << std::endl;
 	SaveCargoLabels(file, cargo_used);
 
 	std::cerr << "Serializing " << file.order_lists.size() << " order lists..." << std::endl;
