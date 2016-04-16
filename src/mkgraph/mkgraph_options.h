@@ -16,6 +16,7 @@ struct options
 	std::string cargo;
 	bool hide_express = false,
 		hide_short_trains = false;
+	float stretch = 1.0f;
 
 	options(int arg, char** argv);
 	static void usage();

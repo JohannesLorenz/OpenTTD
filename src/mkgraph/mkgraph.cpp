@@ -162,7 +162,7 @@ public:
 					{
 						std::size_t value_found_in_last = value_of(supersets, cur_line, last_in_node->second);
 						if(last_station_no < value_found_in_last
-							&& value_found_in_last < new_last_station_no)
+							&& value_found_in_last == (new_last_station_no-1))
 						{
 							// ok, it was just a slope we've left out
 							no_express = true;
@@ -226,16 +226,16 @@ public:
 		for(auto itr = stations.begin() + 1; itr != stations.end(); ++itr)
 		 follow_to_node(itr, supersets, itr-1, train);
 		// last node: (end-1) -> (begin)
-		// follow_to_node(stations.begin(), supersets, stations.end() - 1, train);
-		// TODO: short or express for last part...
-
+		follow_to_node(stations.begin(), supersets, stations.end() - 1, train);
 
 		int result = no_supersets;
 		for(const auto& pr : supersets)
 		{
+#ifdef DEBUG_EXPRESS_TRAINS
 			std::cerr << "train " << train
 				<< ", other: " << pr.first
 				<< " -> short? " << pr.second.can_be_short_train << std::endl;
+#endif
 			result |= (pr.second.can_be_short_train
 				? is_short_train : is_express_train);
 		}
@@ -300,16 +300,26 @@ int run(const options& opt)
 		++(next = itr);
 		int type = nl.traverse(*itr);
 
-		if(((type & node_list_t::is_express_train) && opt.hide_express)
-			|| ((type & node_list_t::is_short_train) && opt.hide_short_trains) )
+		bool is_express = type & node_list_t::is_express_train,
+			is_short = type & node_list_t::is_short_train;
+
+		if((is_express && opt.hide_express)||(is_short && opt.hide_short_trains))
 		{
 			UnitID erased_no = itr->unit_number;
+			std::cerr << "Erasing train: " << erased_no << ", reason: " <<
+				((is_express && is_short)
+					? "express + short"
+					: is_express
+						? "express"
+						: "short")
+				<< std::endl;
 			file.order_lists.erase(itr);
-			std::cerr << "Would erase: " << erased_no << ", reason: " << type << std::endl;
 		}
 	}
 
 	std::map<StationID, int> station_flags;
+	const float passed_offset_x = 0.2, passed_offset_y = 0.2;
+
 	/*
 		find out which stations are actually being used...
 	*/
@@ -357,20 +367,20 @@ int run(const options& opt)
 			if(flags & st_used)
 			std::cout << "\t" << pr.first << " [xlabel=\""
 				<< pr.second.name << "\", pos=\""
-				<< pr.second.x
+				<< (pr.second.x * opt.stretch)
 				<< ", "
-				<< pr.second.y
+				<< (pr.second.y * opt.stretch)
 				<< "!\"];" << std::endl;
 			if(flags & st_passed)
 			std::cout << "\tp" << pr.first << " [pos=\""
-				<< pr.second.x-0.2f
+				<< ((pr.second.x-passed_offset_x) * opt.stretch)
 				<< ", "
-				<< pr.second.y-0.2f
+				<< ((pr.second.y-passed_offset_y) * opt.stretch)
 				<< "!\" size=0.0, width=0.0, height=0.0];" << std::endl;
 		}
 	}
 
-	float large_prime = 7919.0f; // algebra ftw!
+	float large_prime = 7919.0f;
 	float large_prime_2 = 5417.0f;
 	float order_list_step = ((float)large_prime) / file.order_lists.size();
 	float order_list_step_2 = ((float)large_prime_2) / file.order_lists.size();
@@ -401,8 +411,6 @@ int run(const options& opt)
 				only_double_edges = (double_edges == mid - 1);
 			}
 
-			std::cerr << "only double edges? " << only_double_edges << std::endl;
-
 			std::cout << "\t// order " << itr3->unit_number << " ("
 				<< file.stations[ol.stations[0].first].name << " - "
 				<< file.stations[ol.stations[mid].first].name
@@ -426,7 +434,7 @@ int run(const options& opt)
 			}
 			std::cout << std::endl;
 
-			auto print_end = [&](bool double_edge, std::size_t i, const std::set<CargoLabel>& cargo)
+			auto print_end = [&](bool double_edge, const std::set<CargoLabel>& cargo)
 			{
 				// values below 50 get difficult to read
 				float _value = 0.5f + (value/2.0f);
@@ -435,7 +443,6 @@ int run(const options& opt)
 				{
 					std::cout << ", dir=none";
 				}
-				std::cerr << i << std::endl;
 				if(cargo_ids.size() > 1)
 				{
 					std::cout << ", label=\"";
@@ -464,10 +471,9 @@ int run(const options& opt)
 			};
 			edge_type_t last_edge_type = edge_type_t::duplicate_further;
 
-			std::size_t count = 0;
 			for(std::vector<std::pair<StationID, bool>>::const_iterator
 				itr = ol.stations.begin() + 1;
-				itr != ol.stations.end(); ++itr, ++count)
+				itr != ol.stations.end(); ++itr)
 			{
 				const bool first = itr == ol.stations.begin();
 
@@ -500,7 +506,7 @@ int run(const options& opt)
 				}
 
 				if(last_edge_type != edge_type_t::duplicate_further && edge_type != last_edge_type)
-				 print_end(last_edge_type == edge_type_t::duplicate_first, count, ol.cargo);
+				 print_end(last_edge_type == edge_type_t::duplicate_first, ol.cargo);
 
 				if(edge_type != last_edge_type && edge_type != edge_type_t::duplicate_further)
 				 print_station("\t", *(itr - 1));
@@ -518,7 +524,7 @@ int run(const options& opt)
 			}
 
 			if(last_edge_type != edge_type_t::duplicate_further)
-			 print_end(last_edge_type == edge_type_t::duplicate_first, count, ol.cargo);
+			 print_end(last_edge_type == edge_type_t::duplicate_first, ol.cargo);
 		}
 	}
 
