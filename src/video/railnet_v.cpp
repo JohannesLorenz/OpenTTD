@@ -10,8 +10,8 @@
 #include "../station_base.h"
 #include "../order_base.h"
 #include "../strings_func.h"
-#include "graph_v.h"
-#include "../mkgraph/common.h"
+#include "railnet_v.h"
+#include "../railnet/common.h"
 #include "../vehicle_func.h"
 #include "../depot_base.h"
 
@@ -21,9 +21,9 @@
 #include "../pathfinder/yapf/yapf.hpp"
 
 /** Factory for the graph video driver. */
-static FVideoDriver_Graph iFVideoDriver_Graph;
+static FVideoDriver_Railnet iFVideoDriver_Railnet;
 
-VideoDriver_Graph::VideoDriver_Graph()
+VideoDriver_Railnet::VideoDriver_Railnet()
 {
 }
 
@@ -332,7 +332,7 @@ struct AddStation : DumpStation
 		order_list* new_ol) : nst(nst), vp(vp), new_ol(new_ol) {}
 };
 
-void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList* _ol,*/const Train* train,
+void VideoDriver_Railnet::SaveOrderList(railnet_file_info& file, /*const OrderList* _ol,*/const Train* train,
 	std::vector<bool>& stations_used, std::set<CargoLabel>& cargo_used,
 	std::set<const OrderList*>& order_lists_done) const
 {
@@ -654,7 +654,7 @@ float coord_of(uint orig)
 	return orig / scale + offset;
 }
 
-void VideoDriver_Graph::SaveStation(struct railnet_file_info& file, const struct BaseStation* st,
+void VideoDriver_Railnet::SaveStation(struct railnet_file_info& file, const struct BaseStation* st,
 	const std::vector<bool> &stations_used) const
 {
 	static char buf[256];
@@ -671,14 +671,14 @@ void VideoDriver_Graph::SaveStation(struct railnet_file_info& file, const struct
 	}
 }
 
-void VideoDriver_Graph::SaveCargoLabels(railnet_file_info &file, std::set<CargoLabel>& s) const
+void VideoDriver_Railnet::SaveCargoLabels(railnet_file_info &file, std::set<CargoLabel>& s) const
 {
 	int count = 0;
 	for(std::set<CargoLabel>::const_iterator itr = s.begin(); itr != s.end(); ++itr)
 	 file.cargo_names.insert(std::make_pair(++count, *itr));
 }
 
-void VideoDriver_Graph::MainLoop()
+void VideoDriver_Railnet::MainLoop()
 {
 	//uint i;
 	//for (i = 0; i < this->ticks; i++) {
