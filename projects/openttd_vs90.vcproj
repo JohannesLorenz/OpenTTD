@@ -756,6 +756,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\..\src\railnet\common.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\..\src\string.cpp"
 				>
 			</File>
@@ -1464,7 +1468,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\..\src\video\graph_v.h"
+				RelativePath=".\..\src\video\railnet_v.h"
 				>
 			</File>
 			<File
@@ -1681,6 +1685,10 @@
 			</File>
 			<File
 				RelativePath=".\..\src\strgen\strgen.h"
+				>
+			</File>
+			<File
+				RelativePath=".\..\src\railnet\common.h"
 				>
 			</File>
 			<File
@@ -4416,7 +4424,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\..\src\video\graph_v.cpp"
+				RelativePath=".\..\src\video\railnet_v.cpp"
 				>
 			</File>
 			<File

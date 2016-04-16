@@ -345,6 +345,9 @@
     <ClCompile Include="..\src\strgen\strgen_base.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\railnet\common.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\string.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -873,7 +876,7 @@
     <ClInclude Include="..\src\video\null_v.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\src\video\graph_v.h">
+    <ClInclude Include="..\src\video\railnet_v.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\object.h">
@@ -1036,6 +1039,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\strgen\strgen.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\railnet\common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\src\string_base.h">
@@ -3006,7 +3012,7 @@
     <ClCompile Include="..\src\video\null_v.cpp">
       <Filter>Video</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\video\graph_v.cpp">
+    <ClCompile Include="..\src\video\railnet_v.cpp">
       <Filter>Video</Filter>
     </ClCompile>
     <ClCompile Include="..\src\video\sdl_v.cpp">
