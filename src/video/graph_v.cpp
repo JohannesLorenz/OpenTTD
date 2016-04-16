@@ -544,18 +544,15 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 			already_added.cargo.begin(), already_added.cargo.end());
 		bool new_is_subset = std::includes(already_added.cargo.begin(), already_added.cargo.end(),
 			new_ol.cargo.begin(), new_ol.cargo.end());
-
 		if(added_is_subset || new_is_subset)
 		{
 			std::size_t start_found = 0;
 			std::vector<std::pair<StationID, bool> >::const_iterator sitr
 				= already_added.stations.begin();
 			for( ;
-				sitr != already_added.stations.end() &&
-					sitr->first != new_ol.stations.front().first
-				; ++sitr, ++start_found) ;
-
-			if(sitr != already_added.stations.end())
+				sitr != already_added.stations.end()
+				; ++sitr, ++start_found)
+			if(sitr->first == new_ol.stations.front().first)
 			{ // start station found in already added order list?
 
 				bool same_order = false;
@@ -575,8 +572,11 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 					// just the starting point is maybe different
 					// nothing to do
 					this_is_a_new_line = false;
+
+					already_added.cargo.insert(new_ol.cargo.begin(), new_ol.cargo.end());
+					cargo_used.insert(new_ol.cargo.begin(), new_ol.cargo.end());
 				}
-				else
+				else if(added_is_subset && new_is_subset && already_added.is_cycle)
 				{
 					// check if it's the opposite order
 					bool equal = true;
@@ -602,16 +602,13 @@ void VideoDriver_Graph::SaveOrderList(railnet_file_info& file, /*const OrderList
 
 					if(equal)
 					{
-						if(already_added.is_cycle) {
-							already_added.is_cycle = false;
-							already_added.is_bicycle = true;
-						}
+						already_added.is_cycle = false;
+						already_added.is_bicycle = true;
 						// for bicycle, no need to add another
-						// for non-cylce, no need to add anything
 						this_is_a_new_line = false;
 					}
-				}
-			}
+				} // not same order
+			} // foreach start stations
 		}
 
 	} // for all already added order lists
