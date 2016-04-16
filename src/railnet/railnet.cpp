@@ -5,8 +5,6 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/** @file railnet.cpp Implementation of the railnet converter */
-
 #include <cstring>
 #include <map>
 #include <iostream>
@@ -17,7 +15,6 @@
 #include <algorithm>
 
 #include "common.h"
-#include "railnet_node_list.h"
 #include "railnet_options.h"
 
 enum station_flag_t
@@ -29,8 +26,7 @@ enum station_flag_t
 void print_version()
 {
 	std::cerr << "version: <not specified yet>" << std::endl;
-	std::cerr << "railnet file version: " <<
-		comm::railnet_file_info::version << std::endl;
+	std::cerr << "railnet file version: " << railnet_file_info::version << std::endl;
 }
 
 void print_help()
@@ -40,13 +36,10 @@ void print_help()
 	options::usage();
 }
 
-//! Converter to convert a CargoLabel into a C string
 union lbl_to_str_t
 {
-private:
 	int lbl[2];
 	char str[8];
-public:
 	lbl_to_str_t() : lbl{0,0} {}
 	const char* convert(int value)
 	{
@@ -56,10 +49,204 @@ public:
 	}
 } lbl_to_str;
 
-//! main routine of the railnet converter
+struct node_list_t
+{
+	using times_t = unsigned short;
+	using node_info_t = std::multimap<UnitID, times_t>;
+
+	//! @node: C++11 guarantees that equivalent keys remain
+	//! in the insertion order. we insert them sorted by key...
+	std::map<StationID, node_info_t> nodes;
+	std::map<UnitID, times_t> lengths;
+	std::map<UnitID, std::set<CargoLabel>> cargo;
+
+private:
+	void visit(UnitID u, StationID s, times_t nth) {
+		nodes[s].emplace(u, nth);
+	}
+public:
+	void init_nodes(const order_list& ol)
+	{
+		std::size_t nth = 0;
+		UnitID unit_no = ol.unit_number;
+		for(const auto& pr : ol.stations)
+		 if(pr.second) /* if train stops */
+		  visit(unit_no, pr.first, nth++);
+		lengths[unit_no] = nth;
+		for(const auto& c : ol.cargo)
+		 cargo[unit_no].insert(c);
+	}
+
+	enum direction_t
+	{
+		dir_upwards,
+		dir_downwards,
+		dir_none
+	};
+
+	struct super_info_t
+	{
+		times_t station_no;
+		direction_t upwards;
+		std::size_t last_station_no;
+		bool can_be_short_train;
+	};
+
+	std::size_t value_of(const std::multimap<UnitID, super_info_t>& supersets,
+		const UnitID& train, const times_t& value) const
+	{
+		std::size_t length = lengths.at(train);
+		const super_info_t& sinf = supersets.find(train)->second;
+
+		// actually, it's just (value - pr.first % length),
+		// but lenght is added to avoid % on negative numbers
+		return ((length + value) - sinf.station_no) % length;
+	}
+
+	enum superset_type
+	{
+		no_supersets = 0,
+		is_express_train = 1,
+		is_short_train = 2,
+		is_express_and_short_train = 4
+	};
+
+	void follow_to_node(const std::vector<StationID>::const_iterator& itr,
+		std::multimap<UnitID, super_info_t>& supersets,
+		const std::vector<StationID>::const_iterator& itr_1,
+		UnitID train) const
+	{
+		(void)train;
+
+		const node_info_t& info = nodes.at(*itr);
+
+		auto next = supersets.begin();
+		for(auto sitr = supersets.begin(); sitr != supersets.end(); sitr = next)
+		{
+			++(next = sitr);
+
+			UnitID cur_line = sitr->first;
+			std::size_t& last_station_no = sitr->second.last_station_no;
+			std::size_t new_last_station_no = std::numeric_limits<std::size_t>::max();
+
+			const auto in_nodes = info.equal_range(cur_line);
+			std::size_t tmp = lengths.at(cur_line);
+			for(auto in_node = in_nodes.first;
+				in_node != in_nodes.second; ++in_node)
+			{
+				tmp = value_of(supersets, cur_line, in_node->second);
+				if(tmp == 0)
+				 tmp = lengths.at(cur_line);
+				if(tmp >= last_station_no && // is it a future node?
+					tmp < new_last_station_no /* better than previous result? */ )
+				{
+					new_last_station_no = tmp;
+				}
+			}
+
+			if(new_last_station_no == std::numeric_limits<std::size_t>::max())
+			 supersets.erase(sitr);
+			else
+			{
+				// was the last node visited twice before we got here?
+				// if so, this train can still be a short train
+				const auto& last_in_nodes =
+					nodes.at(*itr_1).equal_range(cur_line);
+
+				bool no_express = true;
+				if(last_station_no < new_last_station_no - 1) // some nodes between...
+				{
+					no_express = false;
+					for(auto last_in_node = last_in_nodes.first;
+						(!no_express) && last_in_node != last_in_nodes.second; ++last_in_node)
+					{
+						std::size_t value_found_in_last = value_of(supersets, cur_line, last_in_node->second);
+						if(last_station_no < value_found_in_last
+							&& value_found_in_last == (new_last_station_no-1))
+						{
+							// ok, it was just a slope we've left out
+							no_express = true;
+						}
+					}
+				}
+
+				sitr->second.can_be_short_train =
+					sitr->second.can_be_short_train && no_express;
+
+				// advance
+				last_station_no = new_last_station_no;
+			}
+		}
+	}
+
+	int traverse(const order_list& ol) const
+	{
+		std::vector<StationID> stations;
+		for(const auto& pr : ol.stations)
+		 if(pr.second)
+		  stations.push_back(pr.first);
+
+		UnitID train = ol.unit_number;
+
+		enum class masks
+		{
+			m_same = 1,
+			m_opposite = 2,
+			m_remove = 4,
+			m_two_directions = 3
+		};
+
+		// times_t: offset, char: direction mask
+		std::multimap<UnitID, super_info_t> supersets;
+
+		// find first node where the train stops
+		const node_info_t *station_0 = &nodes.at(stations[0]);
+
+		// fill map for the first node
+		for(const auto& pr : *station_0)
+		if(pr.first != train)
+		{
+			const auto& c_oth = cargo.at(pr.first);
+			const auto& c_this = cargo.at(train);
+			if(std::includes(c_oth.begin(), c_oth.end(), c_this.begin(), c_this.end()))
+			 supersets.emplace(pr.first, super_info_t { pr.second, dir_none, 0, true });
+		}
+
+		for(const auto& pr : *station_0)
+		if(pr.first != train)
+		{
+			const auto& c_oth = cargo.at(pr.first);
+			const auto& c_this = cargo.at(train);
+			if(std::includes(c_oth.begin(), c_oth.end(), c_this.begin(), c_this.end()))
+			if(value_of(supersets, pr.first, station_0->find(pr.first)->second) != 0)
+			 throw "Internal error: invalid value computation";
+		}
+
+		// follow the order list, find monotonically increasing superset line
+		for(auto itr = stations.begin() + 1; itr != stations.end(); ++itr)
+		 follow_to_node(itr, supersets, itr-1, train);
+		// last node: (end-1) -> (begin)
+		follow_to_node(stations.begin(), supersets, stations.end() - 1, train);
+
+		int result = no_supersets;
+		for(const auto& pr : supersets)
+		{
+#ifdef DEBUG_EXPRESS_TRAINS
+			std::cerr << "train " << train
+				<< ", other: " << pr.first
+				<< " -> short? " << pr.second.can_be_short_train << std::endl;
+#endif
+			result |= (pr.second.can_be_short_train
+				? is_short_train : is_express_train);
+		}
+
+		return result;
+	}
+};
+
 int run(const options& opt)
 {
-	comm::railnet_file_info file;
+	railnet_file_info file;
 	deserialize(file, std::cin);
 
 	/*
@@ -67,7 +254,7 @@ int run(const options& opt)
 	*/
 	std::set<int> cargo_ids;
 
-	for(const auto& pr : file.cargo_names.get())
+	for(const auto& pr : file.cargo_names)
 	{
 		const char* str = lbl_to_str.convert(pr.second);
 
@@ -86,17 +273,17 @@ int run(const options& opt)
 		remove unwanted cargo from list
 	*/
 	{
-	std::list<comm::order_list>::iterator itr, next;
-	for(itr = next = file.order_lists.get().begin();
-		itr != file.order_lists.get().end(); itr = next)
+	std::multiset<order_list>::iterator itr, next;
+	for(itr = next = file.order_lists.begin();
+		itr != file.order_lists.end(); itr = next)
 	{
 		++next;
 		bool cargo_found = false;
-		for(std::set<CargoLabel>::const_iterator itr2 = itr->cargo.get().begin();
-			!cargo_found && itr2 != itr->cargo.get().end(); ++itr2)
+		for(std::set<CargoLabel>::const_iterator itr2 = itr->cargo.begin();
+			!cargo_found && itr2 != itr->cargo.end(); ++itr2)
 		 cargo_found = (cargo_ids.find(*itr2) != cargo_ids.end());
 		if(!cargo_found)
-		 file.order_lists.get().erase(itr);
+		 file.order_lists.erase(itr);
 	}
 	}
 
@@ -104,14 +291,14 @@ int run(const options& opt)
 		sort out subset or express trains
 	*/
 	node_list_t nl;
-	for(const comm::order_list& ol : file.order_lists.get())
+	for(const order_list& ol : file.order_lists)
 	 nl.init_nodes(ol);
 
-	auto next = file.order_lists.get().begin();
-	for(auto itr = file.order_lists.get().begin(); itr != file.order_lists.get().end(); itr = next)
+	auto next = file.order_lists.begin();
+	for(auto itr = file.order_lists.begin(); itr != file.order_lists.end(); itr = next)
 	{
 		++(next = itr);
-		int type = nl.traverse(*itr, NULL, false, false);
+		int type = nl.traverse(*itr);
 
 		bool is_express = type & node_list_t::is_express_train,
 			is_short = type & node_list_t::is_short_train;
@@ -126,7 +313,7 @@ int run(const options& opt)
 						? "express"
 						: "short")
 				<< std::endl;
-			file.order_lists.get().erase(itr);
+			file.order_lists.erase(itr);
 		}
 	}
 
@@ -137,16 +324,15 @@ int run(const options& opt)
 		find out which stations are actually being used...
 	*/
 	// only set flags
-	for(std::list<comm::order_list>::const_iterator itr =
-		file.order_lists.get().begin();
-		itr != file.order_lists.get().end(); ++itr)
+	for(std::multiset<order_list>::const_iterator itr = file.order_lists.begin();
+		itr != file.order_lists.end(); ++itr)
 	{
-		if(itr->stations.get().size())
+		if(itr->stations.size())
 		{
-			const comm::order_list& ol = *itr;
+			const order_list& ol = *itr; // TODO: no const (see for loop)
 			for(std::vector<std::pair<StationID, bool> >::const_iterator
-					itr = ol.stations.get().begin();
-					itr != ol.stations.get().end(); ++itr)
+					itr = ol.stations.begin();
+					itr != ol.stations.end(); ++itr)
 			{
 				station_flags[itr->first] |= itr->second ? st_used : st_passed;
 			}
@@ -155,13 +341,12 @@ int run(const options& opt)
 	}
 
 	// this is required for the drawing algorithm
-	for(std::list<comm::order_list>::const_iterator itr3 =
-		file.order_lists.get().begin();
-		itr3 != file.order_lists.get().end(); ++itr3)
+	for(std::multiset<order_list>::const_iterator itr3 = file.order_lists.begin();
+		itr3 != file.order_lists.end(); ++itr3)
 	{
 		// all in all, the whole for loop will not affect the order
-		comm::order_list& ol = const_cast<comm::order_list&>(*itr3);
-		ol.stations.get().push_back(ol.stations.get().front());
+		order_list& ol = const_cast<order_list&>(*itr3);
+		ol.stations.push_back(ol.stations.front());
 	}
 
 	/*
@@ -174,14 +359,14 @@ int run(const options& opt)
 		"\tedge[penwidth=2];\n";
 
 	// draw nodes if stations are used
-	for(const auto& pr : file.stations.get())
+	for(const auto& pr : file.stations)
 	{
 		std::map<StationID, int>::const_iterator itr = station_flags.find(pr.first);
 		int flags = (itr == station_flags.end()) ? 0 : itr->second;
 		{
 			if(flags & st_used)
 			std::cout << "\t" << pr.first << " [xlabel=\""
-				<< pr.second.name.get() << "\", pos=\""
+				<< pr.second.name << "\", pos=\""
 				<< (pr.second.x * opt.stretch)
 				<< ", "
 				<< (pr.second.y * opt.stretch)
@@ -197,40 +382,38 @@ int run(const options& opt)
 
 	float large_prime = 7919.0f;
 	float large_prime_2 = 5417.0f;
-	float order_list_step = ((float)large_prime) / file.order_lists.get().size();
-	float order_list_step_2 = ((float)large_prime_2) / file.order_lists.get().size();
+	float order_list_step = ((float)large_prime) / file.order_lists.size();
+	float order_list_step_2 = ((float)large_prime_2) / file.order_lists.size();
 	float value = 0.0f, hue = 0.0f;
 	std::cout.precision(3);
 
 	/*
 		draw edges
 	*/
-	for(std::list<comm::order_list>::const_iterator itr3 =
-		file.order_lists.get().begin();
-		itr3 != file.order_lists.get().end(); ++itr3)
+	for(std::multiset<order_list>::const_iterator itr3 = file.order_lists.begin();
+		itr3 != file.order_lists.end(); ++itr3)
 	{
 		hue = fmod(hue += order_list_step, 1.0f);
 		value = fmod(value += order_list_step_2, 1.0f);
 
-		if(itr3->stations.get().size())
+		if(itr3->stations.size())
 		{
-			const comm::order_list& ol = *itr3;
-			const auto& cur_stations = ol.stations.get();
+			const order_list& ol = *itr3;
 			bool only_double_edges = ol.is_bicycle;
 			std::size_t double_edges = 0;
-			std::size_t mid = cur_stations.size() >> 1;
+			std::size_t mid = ol.stations.size() >> 1;
 
-			if(!only_double_edges && !(cur_stations.size() & 1))
+			if(!only_double_edges && !(ol.stations.size() & 1))
 			{
 				for(std::size_t i = 1; i < mid; ++i)
 					double_edges += (
-						cur_stations[mid+i] == cur_stations[mid-i]);
+						ol.stations[mid+i] == ol.stations[mid-i]);
 				only_double_edges = (double_edges == mid - 1);
 			}
 
 			std::cout << "\t// order " << itr3->unit_number << " ("
-				<< file.stations.get()[cur_stations[0].first].name.get() << " - "
-				<< file.stations.get()[cur_stations[mid].first].name.get()
+				<< file.stations[ol.stations[0].first].name << " - "
+				<< file.stations[ol.stations[mid].first].name
 				<< ")" << std::endl;
 
 #if 0
@@ -241,12 +424,12 @@ int run(const options& opt)
 			std::cout << std::endl;
 #endif
 			for(std::vector<std::pair<StationID, bool> >::const_iterator
-				itr = cur_stations.begin();
-				itr != cur_stations.end(); ++itr)
+				itr = ol.stations.begin();
+				itr != ol.stations.end(); ++itr)
 			{
 				std::cout
-					<< ((itr == cur_stations.begin()) ? "\t// " : " - ")
-					<< file.stations.get()[itr->first].name.get()
+					<< ((itr == ol.stations.begin()) ? "\t// " : " - ")
+					<< file.stations[itr->first].name
 					<< (itr->second ? "" : "(p)");
 			}
 			std::cout << std::endl;
@@ -289,10 +472,10 @@ int run(const options& opt)
 			edge_type_t last_edge_type = edge_type_t::duplicate_further;
 
 			for(std::vector<std::pair<StationID, bool>>::const_iterator
-				itr = cur_stations.begin() + 1;
-				itr != cur_stations.end(); ++itr)
+				itr = ol.stations.begin() + 1;
+				itr != ol.stations.end(); ++itr)
 			{
-				const bool first = itr == cur_stations.begin();
+				const bool first = itr == ol.stations.begin();
 
 				edge_type_t edge_type = edge_type_t::unique;
 
@@ -301,7 +484,7 @@ int run(const options& opt)
 				else
 				{
 					for(std::vector<std::pair<StationID, bool>>::const_iterator
-						itr2 = cur_stations.begin();
+						itr2 = ol.stations.begin();
 						!(int)edge_type && itr2 != itr; ++itr2)
 						// itr2 < itr => itr2 + 1 is valid
 						// itr == begin => for loop is not run => itr - 1 is valid
@@ -311,7 +494,7 @@ int run(const options& opt)
 					if(!first)
 					for(std::vector<std::pair<StationID, bool>>::const_iterator
 						itr2 = itr + 1;
-						!(int)edge_type && itr2 != cur_stations.end(); ++itr2)
+						!(int)edge_type && itr2 != ol.stations.end(); ++itr2)
 						// itr2 > itr => itr2 - 1 is valid
 						// !first => itr - 1 is valid
 						if(*(itr2 - 1) == *itr && *itr2 == (*(itr - 1)) )
@@ -331,7 +514,7 @@ int run(const options& opt)
 				if(edge_type != edge_type_t::duplicate_further)
 				 print_station(" -> ", *itr);
 
-				if(file.stations.get().find(itr->first) == file.stations.get().end())
+				if(file.stations.find(itr->first) == file.stations.end())
 				{
 					std::cerr << "Could not find station id " << itr->first << std::endl;
 					throw std::runtime_error("invalid station id in order list");

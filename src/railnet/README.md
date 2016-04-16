@@ -51,14 +51,14 @@ You can also use g++ instead of clang++.
 # 4 Using
 If you want to do it step by step:
 ```sh
-/where/you/installed/openttd -g your_savegame.sav -v railnet \
+/where/you/installed/openttd -g ~/.openttd/save/your_savegame.sav -v railnet \
   > map.dat 2>/dev/null
 cat map.dat | ./railnet > map.dot 2>/dev/null
 cat map.dot | dot -Kneato -Tpdf > map.pdf
 ```
 Otherwise, you can also use pipes:
 ```sh
-/where/you/installed/openttd -g your_savegame.sav -v railnet \
+/where/you/installed/openttd -g ~/.openttd/save/your_savegame.sav -v railnet \
   | ./railnet | dot -Kneato -Tpdf
 ```
 
@@ -69,9 +69,8 @@ The author thanks:
 
 # 6 Contact
 
-Feel free to give feedback. Either to the community, or directly to the
-railnet author:
-
+Feel free to give feedback. The author's e-mail address is shown if you \
+execute this in a shell:
 ```sh
 printf "\x6a\x6f\x68\x61\x6e\x6e\x65\x73\x40\x6c\x6f\
 \x72\x65\x6e\x7a\x2d\x68\x6f\x2e\x6d\x65\x0a"
