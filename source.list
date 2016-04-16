@@ -82,7 +82,7 @@ sprite.cpp
 spritecache.cpp
 station.cpp
 strgen/strgen_base.cpp
-mkgraph/common.cpp
+railnet/common.cpp
 string.cpp
 stringfilter.cpp
 strings.cpp
@@ -288,7 +288,7 @@ news_type.h
 music/null_m.h
 sound/null_s.h
 video/null_v.h
-video/graph_v.h
+video/railnet_v.h
 object.h
 object_base.h
 object_type.h
@@ -343,7 +343,7 @@ stdafx.h
 story_base.h
 story_type.h
 strgen/strgen.h
-mkgraph/common.h
+railnet/common.h
 string_base.h
 string_func.h
 string_type.h
@@ -1076,7 +1076,7 @@ pathfinder/yapf/yapf_type.hpp
 # Video
 video/dedicated_v.cpp
 video/null_v.cpp
-video/graph_v.cpp
+video/railnet_v.cpp
 #if DEDICATED
 #else
 #if ALLEGRO
