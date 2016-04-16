@@ -2,21 +2,26 @@
 #include <iostream>
 #include "mkgraph_options.h"
 
+bool letter_ok(char letter)
+{
+	return isupper(letter) || letter == '_';
+}
+
 options::options(int argc, char** argv)
 {
 	int c;
-	int digit_optind = 0;
 
 	while (true) {
-		int this_option_optind = optind ? optind : 1;
 		int option_index = 0;
+		// TODO: pdfsize=...
 		static struct option long_options[] = {
 			{"help",		no_argument,		0, 'h'},
 			{"version",		no_argument,		0, 'v'},
 			{"list-cargo",		no_argument,		0, 'l'},
 			{"cargo",		required_argument,	0, 'c'},
-			{"hide-short-trains",	no_argument,		0, 's'},
-			{"hide-express-trains",	no_argument,		0, 'e'},
+			{"no-short-trains",	no_argument,		0, 's'},
+			{"no-express-trains",	no_argument,		0, 'e'},
+			{"stretch",		required_argument,	0, 'f'},
 			{0,			0,			0,  0 }
 		};
 
@@ -55,14 +60,19 @@ options::options(int argc, char** argv)
 			cargo = optarg;
 			for(const char* ptr = cargo.c_str(); *ptr; )
 			{
-				if(!isupper(*ptr)|| !isupper(*++ptr)
-					|| !isupper(*++ptr) || !isupper(*++ptr))
-					throw "expected uppercase here";
+				if(!letter_ok(*ptr)|| !letter_ok(*++ptr)
+					|| !letter_ok(*++ptr) || !letter_ok(*++ptr))
+					throw "expected uppercase or underscore here";
 				if(*++ptr==',')
 				 ++ptr;
 				else if(*ptr)
 				 throw "expected comma here";
 			}
+			break;
+		case 'f':
+			stretch = atof(optarg);
+			if(stretch < 0.01 || stretch > 100)
+			 throw "stretch factor should be in range [0.01,100].";
 			break;
 
 
@@ -116,9 +126,9 @@ void options::usage()
 	std::cerr << "\t-v, --version\t\tprint version and exit" << std::endl;
 	std::cerr << "\t-l, --list-cargo\tprint all cargo types from file and exit" << std::endl;
 	std::cerr << "\t-c, --cargo=C1,C2,...\tselect cargo for railnet graph" << std::endl;
-	std::cerr << "\t-s, --hide-short-trains\ttrains that don't run the full order list are" << std::endl;
+	std::cerr << "\t-s, --no-short-trains\ttrains that don't run the full order list are" << std::endl;
 	std::cerr << "\t\t\t\tnot printed as extra railyway lines" << std::endl;
-	std::cerr << "\t-e, --hide-express-trains\ttrains that stop less often are" << std::endl;
+	std::cerr << "\t-e, --no-express-trains\ttrains that stop less often are" << std::endl;
 	std::cerr << "\t\t\t\tnot printed as extra railyway lines" << std::endl;
 }
 
