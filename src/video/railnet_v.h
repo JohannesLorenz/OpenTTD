@@ -6,7 +6,7 @@
 
 typedef uint32 CargoLabel; // forward declaration
 
-class VideoDriver_Graph : public VideoDriver_Null
+class VideoDriver_Railnet : public VideoDriver_Null
 {
 	void SaveOrderList(struct railnet_file_info& file, const Train *train,
 		std::vector<bool> &stations_used, std::set<CargoLabel> &cargo_used, std::set<const OrderList *> &order_lists_done) const;
@@ -14,17 +14,17 @@ class VideoDriver_Graph : public VideoDriver_Null
 		const std::vector<bool> &stations_used) const;
 	void SaveCargoLabels(railnet_file_info &file, std::set<CargoLabel> &s) const;
 public:
-	VideoDriver_Graph();
+	VideoDriver_Railnet();
 	/* virtual */ void MainLoop();
 
-	/* virtual */ const char *GetName() const { return "graph"; }
+	/* virtual */ const char *GetName() const { return "railnet"; }
 };
 
-/** Factory the graph video driver. */
-class FVideoDriver_Graph : public DriverFactoryBase {
+/** Factory the railnet video driver. */
+class FVideoDriver_Railnet : public DriverFactoryBase {
 public:
-	FVideoDriver_Graph() : DriverFactoryBase(Driver::DT_VIDEO, 0, "graph", "Graph Video Driver") {}
-	/* virtual */ Driver *CreateInstance() const { return new VideoDriver_Graph(); }
+	FVideoDriver_Railnet() : DriverFactoryBase(Driver::DT_VIDEO, 0, "railnet", "Railnet Video Driver") {}
+	/* virtual */ Driver *CreateInstance() const { return new VideoDriver_Railnet(); }
 };
 
 #endif // GRAPH_V_H

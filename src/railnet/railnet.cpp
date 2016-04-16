@@ -15,7 +15,7 @@
 #include <algorithm>
 
 #include "common.h"
-#include "mkgraph_options.h"
+#include "railnet_options.h"
 
 enum station_flag_t
 {
@@ -31,7 +31,7 @@ void print_version()
 
 void print_help()
 {
-	std::cerr << "mkgraph tool" << std::endl;
+	std::cerr << "railnet tool" << std::endl;
 	std::cerr << "converts openttd railnet dumps into dot graphs" << std::endl;
 	options::usage();
 }

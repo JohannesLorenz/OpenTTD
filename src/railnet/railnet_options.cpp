@@ -1,6 +1,6 @@
 #include <getopt.h>
 #include <iostream>
-#include "mkgraph_options.h"
+#include "railnet_options.h"
 
 bool letter_ok(char letter)
 {
@@ -125,7 +125,7 @@ void options::usage()
 	std::cerr << "\t-h, --help\t\tprint help and exit" << std::endl;
 	std::cerr << "\t-v, --version\t\tprint version and exit" << std::endl;
 	std::cerr << "\t-l, --list-cargo\tprint all cargo types from file and exit" << std::endl;
-	std::cerr << "\t-c, --cargo=C1,C2,...\tselect cargo for railnet graph" << std::endl;
+	std::cerr << "\t-c, --cargo=C1,C2,...\tshow only lines with cargo C1 or C2 or ..." << std::endl;
 	std::cerr << "\t-s, --no-short-trains\ttrains that don't run the full order list are" << std::endl;
 	std::cerr << "\t\t\t\tnot printed as extra railyway lines" << std::endl;
 	std::cerr << "\t-e, --no-express-trains\ttrains that stop less often are" << std::endl;

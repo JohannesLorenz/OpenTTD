@@ -2,24 +2,24 @@
 Welcome! Thank you for considering the README file.
 
 **Contents**
-  1. What is mkgraph?
+  1. What is railnet?
   2. What is the project status?
   3. Installation
   4. Using
   5. Credits
   6. Contact
 
-# 1 What is mkgraph?
-It is a subproject of OpenTTD to export **route networks**, i.e. graphs that
+# 1 What is railnet?
+It is a subproject of OpenTTD to export **route networks**, i.e. maps that
 depict the tracks and stations of your OpenTTD map.
 
 The project consists of two parts:
-  * The **graph driver**: This is a pseudo-video driver in OpenTTD which dumps
+  * The **railnet driver**: This is a pseudo-video driver in OpenTTD which dumps
     a binary file containing all the stations, their connections and other
     data like carried cargo. It uses the YAPF pathfinder.
-  * The **mkgraph** utility: It takes the binary file and converts it into a
+  * The **railnet** utility: It takes the binary file and converts it into a
     *.dot* file (an input file for tools that generate PDFs, see the "Using"
-    section). Contrary to the graph driver, the mkgraph utility can take
+    section). Contrary to the railnet driver, the railnet utility can take
     parameters for customization.
 
 # 2 What is the project status?
@@ -34,8 +34,8 @@ coding guidelines and has not been approved by the OpenTTD developers.
 
 ## Installing
 ```sh
-git clone https://github.com/JohannesLorenz/OpenTTD openttd-mkgraph
-cd openttd-mkgraph
+git clone https://github.com/JohannesLorenz/OpenTTD openttd-railnet
+cd openttd-railnet
 # now, follow the usual
 # [installation instructions for OpenTTD](../../readme.txt)
 # usually, it's enough to do
@@ -43,23 +43,23 @@ CC=clang CXX=clang++ ./configure --prefix=/where/you/want/to/install/it \
   --enable-debug=3
 make install
 # then, type
-clang++ -lm -g -ggdb -Wall -Wextra -std=c++11 -DEXPORTER src/mkgraph/*.cpp \
-  -o mkgraph
+clang++ -lm -g -ggdb -Wall -Wextra -std=c++11 -DEXPORTER src/railnet/*.cpp \
+  -o railnet
 ```
 You can also use g++ instead of clang++.
 
 # 4 Using
 If you want to do it step by step:
 ```sh
-/where/you/installed/openttd -g ~/.openttd/save/your_savegame.sav -v graph \
-  -s null -m null > graph.dat 2>/dev/null
-cat graph.dat | ./mkgraph > graph.dot 2>/dev/null
-cat graph.dot | dot -Kneato -Tpdf > graph.pdf
+/where/you/installed/openttd -g ~/.openttd/save/your_savegame.sav -v railnet \
+  > map.dat 2>/dev/null
+cat map.dat | ./railnet > map.dot 2>/dev/null
+cat map.dot | dot -Kneato -Tpdf > map.pdf
 ```
 Otherwise, you can also use pipes:
 ```sh
-/where/you/installed/openttd -g ~/.openttd/save/your_savegame.sav -v graph \
-  -s null -m null | ./mkgraph | dot -Kneato -Tpdf
+/where/you/installed/openttd -g ~/.openttd/save/your_savegame.sav -v railnet \
+  | ./railnet | dot -Kneato -Tpdf
 ```
 
 # 5 Credits
