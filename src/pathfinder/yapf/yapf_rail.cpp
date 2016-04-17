@@ -571,7 +571,7 @@ public:
 
 				all_tiles.set_cost(pNode->m_cost);
 				pNode->IterateTiles(v, Yapf(), *this, all_tiles, &all_tiles_t::func);
-                
+
 				pNode = pNode->m_parent;
 			}
 		}
