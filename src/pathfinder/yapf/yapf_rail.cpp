@@ -474,65 +474,53 @@ public:
 			pf1.StationsToTarget(v, path_found, target, ftor,
 				orig, orig_dir, current_order, best_cost);
 		}
-		if(try_reverse && !path_found)
-		{
+		if (try_reverse && !path_found) {
 			Tpf pf2;
 			pf2.StationsToTarget(v, path_found, target, ftor,
 				orig, orig_dir, current_order, best_cost, true);
 		}
 	}
 
-	struct all_tiles_t
-	{
+	//! functor that @a StationsToTarget calls on every tile of a node
+	class all_tiles_t {
 		StationFtor& ftor;
-		int cost;
-		//bool executed() const { return found_station != INVALID_STATION; }
-		//StationID found_station, recent_station;
-		const void* found_building;
+		int cost; //!< cost to the current node
+		const void* found_building; //!< last remembered building
 
-		all_tiles_t(StationFtor& ftor) : ftor(ftor),
-			found_building(NULL) {}
-// TODO: public, private...
-private:
 		template<class T>
 		void _func(const T& building, TileIndex tile, Trackdir tdir)
 		{
-			if(found_building != &building)
-			{
+			if (found_building != &building) {
 				ftor(building, tile, tdir, cost);
 				found_building = &building;
 			}
 		}
-public:
+	public:
 		void set_cost(int _cost) { cost = _cost; }
 		bool func(TileIndex tile, Trackdir tdir)
 		{
-			if(GetTileType(tile) == MP_STATION)
-			{
+			if (GetTileType(tile) == MP_STATION) {
 				Station* st = Station::GetByTile(tile);
-				if(st) {
+				if (st) {
 					_func(*st, tile, tdir);
 					return false;
-				}
-				else
-				{
+				} else {
 					Waypoint* wp = Waypoint::GetByTile(tile);
-					if(wp)
-					{
+					if(wp) {
 						_func(*wp, tile, tdir);
 						return false;
 					}
 					else throw "Expected tile of type MP_STATION to be of type"
 						"Station or Waypoint.";
 				}
-			}
-			else if(IsDepotTile(tile))
-			{
+			} else if (IsDepotTile(tile)) {
 				_func(*Depot::GetByTile(tile), tile, tdir);
 				return false;
 			}
 			else return true;
 		}
+		all_tiles_t(StationFtor& ftor) : ftor(ftor),
+			found_building(NULL) {}
 	};
 
 
@@ -543,30 +531,26 @@ public:
 		if (target != NULL) target->tile = INVALID_TILE;
 
 		/* set origin and destination nodes */
-		if(orig == INVALID_TILE) {
+		if (orig == INVALID_TILE) {
 			PBSTileInfo origin = FollowTrainReservation(v);
 			orig = origin.tile;
 			orig_dir = origin.trackdir;
 #ifdef DEBUG_GRAPH_YAPF
 			fprintf(stderr, "SET ORIGIN FROM TRAIN: %d, %d", TileX(orig), TileY(orig));
 #endif
-		}
-		else
-		{
+		} else {
 #ifdef DEBUG_GRAPH_YAPF
 			fprintf(stderr, "SET ORIGIN: %d, %d", TileX(orig), TileY(orig));
 #endif
 		}
 
-		if(force_reverse)
-		 orig_dir = ReverseTrackdir(orig_dir);
+		if(force_reverse) orig_dir = ReverseTrackdir(orig_dir);
 
 		Yapf().SetOrigin(orig, orig_dir, INVALID_TILE, INVALID_TRACKDIR, 1, true);
 
-		if(current_order.GetType() != OT_GOTO_STATION
+		if (current_order.GetType() != OT_GOTO_STATION
 			&& current_order.GetType() != OT_GOTO_WAYPOINT
-			&& current_order.GetType() != OT_GOTO_DEPOT)
-		{
+			&& current_order.GetType() != OT_GOTO_DEPOT) {
 			return; // no yet handled
 		}
 
@@ -581,22 +565,16 @@ public:
 
 			/* path was found or at least suggested
 			 * walk through the path back to the origin */
-			//StationID recent_station = INVALID_STATION;
 
-			all_tiles_t all_tiles(ftor/*, pNode->m_cost, recent_station*/);
+			all_tiles_t all_tiles(ftor);
 			while (pNode != NULL) {
 
 				all_tiles.set_cost(pNode->m_cost);
-
 				pNode->IterateTiles(v, Yapf(), *this, all_tiles, &all_tiles_t::func);
-			//	if(all_tiles.found_station != INVALID_STATION)
-			//	 recent_station = all_tiles.found_station;
 
 				pNode = pNode->m_parent;
 			}
-
 		}
-
 	}
 
 	static bool stCheckReverseTrain(const Train *v, TileIndex t1, Trackdir td1, TileIndex t2, Trackdir td2, int reverse_penalty)

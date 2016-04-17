@@ -1,8 +1,15 @@
+/* $Id$ */
+
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
  * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/**
+ * @file common.h Common data structures shared by
+ *	the railnet video driver (ingame) and the railnet utility
  */
 
 #ifndef COMMON_H
@@ -27,7 +34,8 @@ typedef uint32 CargoLabel;
 #include "../transport_type.h"
 #endif
 
-// TODO: namespace for the whole file
+namespace comm
+{
 
 struct order_list
 {
@@ -66,32 +74,36 @@ struct railnet_file_info
 	IO primitives:
 */
 
+namespace dtl
+{
+
 void _wrt(std::ostream& o, const char* raw, std::size_t sz);
 void _rd(std::istream& i, char* raw, std::size_t sz);
 
 template<class T>
-void wrt(const T& raw, std::ostream& o) {
+inline void wrt(const T& raw, std::ostream& o) {
 	_wrt(o, reinterpret_cast<const char*>(&raw), sizeof(raw));
 }
 
 template<class T>
-void rd(T& raw, std::istream& i) {
+inline void rd(T& raw, std::istream& i) {
 	_rd(i, reinterpret_cast<char*>(&raw), sizeof(raw));
 }
 
-inline void serialize(const byte& b, std::ostream& o) { wrt(b, o); }
-inline void serialize(const uint16& i, std::ostream& o) { wrt(i, o); }
-inline void serialize(const uint32& i, std::ostream& o) { wrt(i, o); }
-inline void serialize(const bool& b, std::ostream& o) { wrt(b, o); }
-inline void serialize(const char& c, std::ostream& o) { wrt(c, o); }
-inline void serialize(const float& f, std::ostream& o) { wrt(f, o); }
+}
+inline void serialize(const byte& b, std::ostream& o) { dtl::wrt(b, o); }
+inline void serialize(const uint16& i, std::ostream& o) { dtl::wrt(i, o); }
+inline void serialize(const uint32& i, std::ostream& o) { dtl::wrt(i, o); }
+inline void serialize(const bool& b, std::ostream& o) { dtl::wrt(b, o); }
+inline void serialize(const char& c, std::ostream& o) { dtl::wrt(c, o); }
+inline void serialize(const float& f, std::ostream& o) { dtl::wrt(f, o); }
 
-inline void deserialize(byte& b, std::istream& i) { rd(b, i); }
-inline void deserialize(uint16& i, std::istream& is) { rd(i, is); }
-inline void deserialize(uint32& i, std::istream& is) { rd(i, is); }
-inline void deserialize(bool& b, std::istream& i) { rd(b, i); }
-inline void deserialize(char& c, std::istream& i) { rd(c, i); }
-inline void deserialize(float& f, std::istream& i) { rd(f, i); }
+inline void deserialize(byte& b, std::istream& i) { dtl::rd(b, i); }
+inline void deserialize(uint16& i, std::istream& is) { dtl::rd(i, is); }
+inline void deserialize(uint32& i, std::istream& is) { dtl::rd(i, is); }
+inline void deserialize(bool& b, std::istream& i) { dtl::rd(b, i); }
+inline void deserialize(char& c, std::istream& i) { dtl::rd(c, i); }
+inline void deserialize(float& f, std::istream& i) { dtl::rd(f, i); }
 
 /*
 	IO containers/structs:
@@ -114,6 +126,8 @@ void serialize(const Container& c, std::ostream& o,
 		serialize(*itr, o);
 }
 
+namespace dtl {
+
 //! generic push back function for all types of containers
 template<class Cont> void push_back(Cont& c,
 	const typename Cont::value_type& val) {
@@ -131,6 +145,8 @@ struct noconst_value_type_of<std::map<T1, T2> > {
 	typedef typename std::pair<T1, T2> type;
 };
 
+}
+
 //! sfinae based container deserializer
 template<class Container>
 void deserialize(Container& c, std::istream& is,
@@ -140,9 +156,9 @@ void deserialize(Container& c, std::istream& is,
 	deserialize(sz, is);
 	for(uint32 i = 0; i<sz; ++i)
 	{
-		typename noconst_value_type_of<Container>::type val;
+		typename dtl::noconst_value_type_of<Container>::type val;
 		deserialize(val, is);
-		push_back(c, val);
+		dtl::push_back(c, val);
 	}
 }
 
@@ -161,6 +177,8 @@ void serialize(const railnet_file_info& file, std::ostream& o);
 void deserialize(order_list& ol, std::istream& i);
 void deserialize(station_info& si, std::istream &i);
 void deserialize(railnet_file_info& file, std::istream &i);
+
+} // namespace comm
 
 #endif // COMMON_H
 

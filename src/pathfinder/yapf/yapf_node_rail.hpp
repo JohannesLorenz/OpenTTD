@@ -208,6 +208,7 @@ struct CYapfRailNodeT
 		return (funct.*func)(cur, cur_td);
 	}
 
+	// case of IterateTiles where obj = funct
 	template <class Tbase, class Tfunc, class Tpf>
 	bool IterateTiles(const Train *v, Tpf &yapf, Tbase &obj, bool (Tfunc::*func)(TileIndex, Trackdir)) const
 	{

@@ -1,8 +1,15 @@
+/*
+ * This file is part of OpenTTD.
+ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
+ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <getopt.h>
 #include <iostream>
 #include "railnet_options.h"
 
-bool letter_ok(char letter)
+bool cargo_ltr(char letter)
 {
 	return isupper(letter) || letter == '_';
 }
@@ -13,7 +20,6 @@ options::options(int argc, char** argv)
 
 	while (true) {
 		int option_index = 0;
-		// TODO: pdfsize=...
 		static struct option long_options[] = {
 			{"help",		no_argument,		0, 'h'},
 			{"version",		no_argument,		0, 'v'},
@@ -60,8 +66,8 @@ options::options(int argc, char** argv)
 			cargo = optarg;
 			for(const char* ptr = cargo.c_str(); *ptr; )
 			{
-				if(!letter_ok(*ptr)|| !letter_ok(*++ptr)
-					|| !letter_ok(*++ptr) || !letter_ok(*++ptr))
+				if(!cargo_ltr(*ptr)|| !cargo_ltr(*++ptr)
+					|| !cargo_ltr(*++ptr) || !cargo_ltr(*++ptr))
 					throw "expected uppercase or underscore here";
 				if(*++ptr==',')
 				 ++ptr;
@@ -74,54 +80,28 @@ options::options(int argc, char** argv)
 			if(stretch < 0.01 || stretch > 100)
 			 throw "stretch factor should be in range [0.01,100].";
 			break;
-
-
-/*		case '0':
-		case '1':
-		case '2':
-			if (digit_optind != 0 && digit_optind != this_option_optind)
-				printf("digits occur in two different argv-elements.\n");
-			digit_optind = this_option_optind;
-			printf("option %c\n", c);
-			break;
-
-		case 'a':
-			printf("option a\n");
-			break;
-
-		case 'b':
-			printf("option b\n");
-			break;
-
-		case 'c':
-			printf("option c with value '%s'\n", optarg);
-			break;
-
-		case 'd':
-			printf("option d with value '%s'\n", optarg);
-			break;*/
-
 		case '?':
 			std::cerr << "unrecognized option found" << std::endl;
 			exit(0);
 			break;
-
 		default:
 			printf("?? getopt returned character code 0%o ??\n", c);
 		}
 	}
 
-	if (optind < argc) {
+	// FEATURE: allow of forbid this
+/*	if (optind < argc) {
 		printf("non-option ARGV-elements: ");
 		while (optind < argc)
 			printf("%s ", argv[optind++]);
 		printf("\n");
-	}
+	}*/
 }
 
 void options::usage()
 {
-	std::cerr << "usage:" << std::endl;
+	std::cerr << "usage: railnet <options>" << std::endl;
+	std::cerr << "options:" << std::endl;
 	std::cerr << "\t-h, --help\t\tprint help and exit" << std::endl;
 	std::cerr << "\t-v, --version\t\tprint version and exit" << std::endl;
 	std::cerr << "\t-l, --list-cargo\tprint all cargo types from file and exit" << std::endl;

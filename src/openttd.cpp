@@ -776,7 +776,7 @@ int openttd_main(int argc, char *argv[])
 
 	if (videodriver == NULL && _ini_videodriver != NULL) videodriver = stredup(_ini_videodriver);
 	DriverFactoryBase::SelectDriver(videodriver, Driver::DT_VIDEO);
-	if(videodriver && !strcmp(videodriver, "railnet")) {
+	if (videodriver && !strcmp(videodriver, "railnet")) {
 		free(sounddriver);
 		sounddriver = stredup("null");
 		free(musicdriver);
@@ -843,8 +843,6 @@ int openttd_main(int argc, char *argv[])
 	}
 	free(music_set);
 
-	fputs(sounddriver, stderr);
-	fputs("\n", stderr);
 	if (sounddriver == NULL && _ini_sounddriver != NULL) sounddriver = stredup(_ini_sounddriver);
 	DriverFactoryBase::SelectDriver(sounddriver, Driver::DT_SOUND);
 	free(sounddriver);
