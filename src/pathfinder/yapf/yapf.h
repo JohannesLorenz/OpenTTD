@@ -97,6 +97,7 @@ bool YapfTrainCheckReverse(const Train *v);
  */
 bool YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, bool override_railtype);
 
+//! @a a functor that can be called on stations, waypoints and depots
 class StationFtor
 {
 	virtual void OnTile(const struct Station& st, const TileIndex& t, const Trackdir& td, int cost) = 0;
@@ -114,14 +115,19 @@ inline StationFtor::~StationFtor() {}
 /**
  * Finds the best path for given train using YAPF and
  * executes a @a StationFtor for each station to target, in reverse order
- * @param v        the train that needs to find a path
- * @param path_found [out] Whether a path has been found (true) or has been guessed (false)
- * @param target   [out] the target tile of the reservation, free is set to true if path was reserved
- * @param ftor     station functor to be executed along the best path in reverse order
+ * @param v             the train that needs to find a path
+ * @param path_found    [out] Whether a path has been found (true) or not (false)
+ * @param target        [out] the target tile of the reservation, free is set to true if path was reserved
+ * @param ftor          station functor to be executed along the best path in reverse order
+ * @param orig          origin, or INVALID_TILE if search should start at @a v
+ * @param orig_dir      direction to start at @a orig. ignored if @a orig == INVALID_TILE
+ * @param current_order order, containing the destination
+ * @param best_cost     functor will only be called if computed cost < best_cost
+ * @param try_reverse   whether to try in the reverse direction of @a orig_dir if no path was found
  */
 void YapfTrainStationsToTarget(const Train *v, bool &path_found, struct PBSTileInfo *target,
-	StationFtor& ftor, TileIndex orig, Trackdir orig_dir, const struct Order &current_order, int best_cost,
-	bool try_reverse = true);
+	StationFtor& ftor, TileIndex orig, Trackdir orig_dir, const struct Order &current_order,
+	int best_cost, bool try_reverse = true);
 
 
 #endif /* YAPF_H */

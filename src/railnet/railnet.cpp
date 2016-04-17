@@ -5,6 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <http://www.gnu.org/licenses/>.
  */
 
+/** @file railnet.cpp Implementation of the railnet converter */
+
 #include <cstring>
 #include <map>
 #include <iostream>
@@ -26,7 +28,8 @@ enum station_flag_t
 void print_version()
 {
 	std::cerr << "version: <not specified yet>" << std::endl;
-	std::cerr << "railnet file version: " << railnet_file_info::version << std::endl;
+	std::cerr << "railnet file version: " <<
+		comm::railnet_file_info::version << std::endl;
 }
 
 void print_help()
@@ -36,10 +39,13 @@ void print_help()
 	options::usage();
 }
 
+//! Converter to convert a CargoLabel into a C string
 union lbl_to_str_t
 {
+private:
 	int lbl[2];
 	char str[8];
+public:
 	lbl_to_str_t() : lbl{0,0} {}
 	const char* convert(int value)
 	{
@@ -49,6 +55,9 @@ union lbl_to_str_t
 	}
 } lbl_to_str;
 
+//! a list that hold for each node: for each order list passing,
+//! it's the n'th stop
+//! used for subset detection
 struct node_list_t
 {
 	using times_t = unsigned short;
@@ -65,7 +74,7 @@ private:
 		nodes[s].emplace(u, nth);
 	}
 public:
-	void init_nodes(const order_list& ol)
+	void init_nodes(const comm::order_list& ol)
 	{
 		std::size_t nth = 0;
 		UnitID unit_no = ol.unit_number;
@@ -111,13 +120,14 @@ public:
 		is_express_and_short_train = 4
 	};
 
+	//! single step of @a traverse
+	//! @param itr the current station for which we need to find an equivalent
+	//! @param supersets the supersets set
+	//! @param itr_1 the previous station
 	void follow_to_node(const std::vector<StationID>::const_iterator& itr,
 		std::multimap<UnitID, super_info_t>& supersets,
-		const std::vector<StationID>::const_iterator& itr_1,
-		UnitID train) const
+		const std::vector<StationID>::const_iterator& itr_1) const
 	{
-		(void)train;
-
 		const node_info_t& info = nodes.at(*itr);
 
 		auto next = supersets.begin();
@@ -179,7 +189,10 @@ public:
 		}
 	}
 
-	int traverse(const order_list& ol) const
+	//! traverses one order list
+	//! @param ol the order list
+	//! @return subset type of @a ol
+	int traverse(const comm::order_list& ol) const
 	{
 		std::vector<StationID> stations;
 		for(const auto& pr : ol.stations)
@@ -196,7 +209,6 @@ public:
 			m_two_directions = 3
 		};
 
-		// times_t: offset, char: direction mask
 		std::multimap<UnitID, super_info_t> supersets;
 
 		// find first node where the train stops
@@ -224,9 +236,9 @@ public:
 
 		// follow the order list, find monotonically increasing superset line
 		for(auto itr = stations.begin() + 1; itr != stations.end(); ++itr)
-		 follow_to_node(itr, supersets, itr-1, train);
+		 follow_to_node(itr, supersets, itr-1);
 		// last node: (end-1) -> (begin)
-		follow_to_node(stations.begin(), supersets, stations.end() - 1, train);
+		follow_to_node(stations.begin(), supersets, stations.end() - 1);
 
 		int result = no_supersets;
 		for(const auto& pr : supersets)
@@ -244,9 +256,10 @@ public:
 	}
 };
 
+//! main routine of the railnet converter
 int run(const options& opt)
 {
-	railnet_file_info file;
+	comm::railnet_file_info file;
 	deserialize(file, std::cin);
 
 	/*
@@ -273,7 +286,7 @@ int run(const options& opt)
 		remove unwanted cargo from list
 	*/
 	{
-	std::multiset<order_list>::iterator itr, next;
+	std::multiset<comm::order_list>::iterator itr, next;
 	for(itr = next = file.order_lists.begin();
 		itr != file.order_lists.end(); itr = next)
 	{
@@ -291,7 +304,7 @@ int run(const options& opt)
 		sort out subset or express trains
 	*/
 	node_list_t nl;
-	for(const order_list& ol : file.order_lists)
+	for(const comm::order_list& ol : file.order_lists)
 	 nl.init_nodes(ol);
 
 	auto next = file.order_lists.begin();
@@ -324,12 +337,13 @@ int run(const options& opt)
 		find out which stations are actually being used...
 	*/
 	// only set flags
-	for(std::multiset<order_list>::const_iterator itr = file.order_lists.begin();
+	for(std::multiset<comm::order_list>::const_iterator itr =
+		file.order_lists.begin();
 		itr != file.order_lists.end(); ++itr)
 	{
 		if(itr->stations.size())
 		{
-			const order_list& ol = *itr; // TODO: no const (see for loop)
+			const comm::order_list& ol = *itr;
 			for(std::vector<std::pair<StationID, bool> >::const_iterator
 					itr = ol.stations.begin();
 					itr != ol.stations.end(); ++itr)
@@ -341,11 +355,12 @@ int run(const options& opt)
 	}
 
 	// this is required for the drawing algorithm
-	for(std::multiset<order_list>::const_iterator itr3 = file.order_lists.begin();
+	for(std::multiset<comm::order_list>::const_iterator itr3 =
+		file.order_lists.begin();
 		itr3 != file.order_lists.end(); ++itr3)
 	{
 		// all in all, the whole for loop will not affect the order
-		order_list& ol = const_cast<order_list&>(*itr3);
+		comm::order_list& ol = const_cast<comm::order_list&>(*itr3);
 		ol.stations.push_back(ol.stations.front());
 	}
 
@@ -390,7 +405,8 @@ int run(const options& opt)
 	/*
 		draw edges
 	*/
-	for(std::multiset<order_list>::const_iterator itr3 = file.order_lists.begin();
+	for(std::multiset<comm::order_list>::const_iterator itr3 =
+		file.order_lists.begin();
 		itr3 != file.order_lists.end(); ++itr3)
 	{
 		hue = fmod(hue += order_list_step, 1.0f);
@@ -398,7 +414,7 @@ int run(const options& opt)
 
 		if(itr3->stations.size())
 		{
-			const order_list& ol = *itr3;
+			const comm::order_list& ol = *itr3;
 			bool only_double_edges = ol.is_bicycle;
 			std::size_t double_edges = 0;
 			std::size_t mid = ol.stations.size() >> 1;

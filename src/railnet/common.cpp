@@ -1,3 +1,5 @@
+/* $Id$ */
+
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
@@ -14,15 +16,19 @@
 #include <iostream>
 #include "common.h"
 
+namespace comm {
+
 const std::string railnet_file_info::hdr = "openttd/railnet";
 const uint railnet_file_info::version = 0;
 
-void _wrt(std::ostream& o, const char* raw, std::size_t sz) {
-	o.write(raw, sz);
-}
+namespace dtl {
+	void _wrt(std::ostream& o, const char* raw, std::size_t sz) {
+		o.write(raw, sz);
+	}
 
-void _rd(std::istream& i, char* raw, std::size_t sz) {
-	i.read(raw, sz);
+	void _rd(std::istream& i, char* raw, std::size_t sz) {
+		i.read(raw, sz);
+	}
 }
 
 bool order_list::operator<(const order_list &other) const
@@ -52,15 +58,12 @@ void deserialize(order_list &ol, std::istream &i)
 	deserialize(ol.stations, i);
 }
 
-
-
 void serialize(const station_info &si, std::ostream &o)
 {
 	serialize(si.name, o);
 	serialize(si.x, o);
 	serialize(si.y, o);
 }
-
 
 void deserialize(station_info &si, std::istream &i)
 {
@@ -89,5 +92,7 @@ void deserialize(railnet_file_info &file, std::istream &i)
 	deserialize(file.order_lists, i);
 	deserialize(file.stations, i);
 	deserialize(file.cargo_names, i);
+}
+
 }
 
