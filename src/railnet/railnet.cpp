@@ -78,11 +78,11 @@ public:
 	{
 		std::size_t nth = 0;
 		UnitID unit_no = ol.unit_number;
-		for(const auto& pr : ol.stations)
+		for(const auto& pr : ol.stations.get())
 		 if(pr.second) /* if train stops */
 		  visit(unit_no, pr.first, nth++);
 		lengths[unit_no] = nth;
-		for(const auto& c : ol.cargo)
+		for(const auto& c : ol.cargo.get())
 		 cargo[unit_no].insert(c);
 	}
 
@@ -195,7 +195,7 @@ public:
 	int traverse(const comm::order_list& ol) const
 	{
 		std::vector<StationID> stations;
-		for(const auto& pr : ol.stations)
+		for(const auto& pr : ol.stations.get())
 		 if(pr.second)
 		  stations.push_back(pr.first);
 
@@ -267,7 +267,7 @@ int run(const options& opt)
 	*/
 	std::set<int> cargo_ids;
 
-	for(const auto& pr : file.cargo_names)
+	for(const auto& pr : file.cargo_names.get())
 	{
 		const char* str = lbl_to_str.convert(pr.second);
 
@@ -287,16 +287,16 @@ int run(const options& opt)
 	*/
 	{
 	std::multiset<comm::order_list>::iterator itr, next;
-	for(itr = next = file.order_lists.begin();
-		itr != file.order_lists.end(); itr = next)
+	for(itr = next = file.order_lists.get().begin();
+		itr != file.order_lists.get().end(); itr = next)
 	{
 		++next;
 		bool cargo_found = false;
-		for(std::set<CargoLabel>::const_iterator itr2 = itr->cargo.begin();
-			!cargo_found && itr2 != itr->cargo.end(); ++itr2)
+		for(std::set<CargoLabel>::const_iterator itr2 = itr->cargo.get().begin();
+			!cargo_found && itr2 != itr->cargo.get().end(); ++itr2)
 		 cargo_found = (cargo_ids.find(*itr2) != cargo_ids.end());
 		if(!cargo_found)
-		 file.order_lists.erase(itr);
+		 file.order_lists.get().erase(itr);
 	}
 	}
 
@@ -304,11 +304,11 @@ int run(const options& opt)
 		sort out subset or express trains
 	*/
 	node_list_t nl;
-	for(const comm::order_list& ol : file.order_lists)
+	for(const comm::order_list& ol : file.order_lists.get())
 	 nl.init_nodes(ol);
 
-	auto next = file.order_lists.begin();
-	for(auto itr = file.order_lists.begin(); itr != file.order_lists.end(); itr = next)
+	auto next = file.order_lists.get().begin();
+	for(auto itr = file.order_lists.get().begin(); itr != file.order_lists.get().end(); itr = next)
 	{
 		++(next = itr);
 		int type = nl.traverse(*itr);
@@ -326,7 +326,7 @@ int run(const options& opt)
 						? "express"
 						: "short")
 				<< std::endl;
-			file.order_lists.erase(itr);
+			file.order_lists.get().erase(itr);
 		}
 	}
 
@@ -338,15 +338,15 @@ int run(const options& opt)
 	*/
 	// only set flags
 	for(std::multiset<comm::order_list>::const_iterator itr =
-		file.order_lists.begin();
-		itr != file.order_lists.end(); ++itr)
+		file.order_lists.get().begin();
+		itr != file.order_lists.get().end(); ++itr)
 	{
-		if(itr->stations.size())
+		if(itr->stations.get().size())
 		{
 			const comm::order_list& ol = *itr;
 			for(std::vector<std::pair<StationID, bool> >::const_iterator
-					itr = ol.stations.begin();
-					itr != ol.stations.end(); ++itr)
+					itr = ol.stations.get().begin();
+					itr != ol.stations.get().end(); ++itr)
 			{
 				station_flags[itr->first] |= itr->second ? st_used : st_passed;
 			}
@@ -356,12 +356,12 @@ int run(const options& opt)
 
 	// this is required for the drawing algorithm
 	for(std::multiset<comm::order_list>::const_iterator itr3 =
-		file.order_lists.begin();
-		itr3 != file.order_lists.end(); ++itr3)
+		file.order_lists.get().begin();
+		itr3 != file.order_lists.get().end(); ++itr3)
 	{
 		// all in all, the whole for loop will not affect the order
 		comm::order_list& ol = const_cast<comm::order_list&>(*itr3);
-		ol.stations.push_back(ol.stations.front());
+		ol.stations.get().push_back(ol.stations.get().front());
 	}
 
 	/*
@@ -374,14 +374,14 @@ int run(const options& opt)
 		"\tedge[penwidth=2];\n";
 
 	// draw nodes if stations are used
-	for(const auto& pr : file.stations)
+	for(const auto& pr : file.stations.get())
 	{
 		std::map<StationID, int>::const_iterator itr = station_flags.find(pr.first);
 		int flags = (itr == station_flags.end()) ? 0 : itr->second;
 		{
 			if(flags & st_used)
 			std::cout << "\t" << pr.first << " [xlabel=\""
-				<< pr.second.name << "\", pos=\""
+				<< pr.second.name.get() << "\", pos=\""
 				<< (pr.second.x * opt.stretch)
 				<< ", "
 				<< (pr.second.y * opt.stretch)
@@ -397,8 +397,8 @@ int run(const options& opt)
 
 	float large_prime = 7919.0f;
 	float large_prime_2 = 5417.0f;
-	float order_list_step = ((float)large_prime) / file.order_lists.size();
-	float order_list_step_2 = ((float)large_prime_2) / file.order_lists.size();
+	float order_list_step = ((float)large_prime) / file.order_lists.get().size();
+	float order_list_step_2 = ((float)large_prime_2) / file.order_lists.get().size();
 	float value = 0.0f, hue = 0.0f;
 	std::cout.precision(3);
 
@@ -406,30 +406,31 @@ int run(const options& opt)
 		draw edges
 	*/
 	for(std::multiset<comm::order_list>::const_iterator itr3 =
-		file.order_lists.begin();
-		itr3 != file.order_lists.end(); ++itr3)
+		file.order_lists.get().begin();
+		itr3 != file.order_lists.get().end(); ++itr3)
 	{
 		hue = fmod(hue += order_list_step, 1.0f);
 		value = fmod(value += order_list_step_2, 1.0f);
 
-		if(itr3->stations.size())
+		if(itr3->stations.get().size())
 		{
 			const comm::order_list& ol = *itr3;
+			const auto& cur_stations = ol.stations.get();
 			bool only_double_edges = ol.is_bicycle;
 			std::size_t double_edges = 0;
-			std::size_t mid = ol.stations.size() >> 1;
+			std::size_t mid = cur_stations.size() >> 1;
 
-			if(!only_double_edges && !(ol.stations.size() & 1))
+			if(!only_double_edges && !(cur_stations.size() & 1))
 			{
 				for(std::size_t i = 1; i < mid; ++i)
 					double_edges += (
-						ol.stations[mid+i] == ol.stations[mid-i]);
+						cur_stations[mid+i] == cur_stations[mid-i]);
 				only_double_edges = (double_edges == mid - 1);
 			}
 
 			std::cout << "\t// order " << itr3->unit_number << " ("
-				<< file.stations[ol.stations[0].first].name << " - "
-				<< file.stations[ol.stations[mid].first].name
+				<< file.stations.get()[cur_stations[0].first].name.get() << " - "
+				<< file.stations.get()[cur_stations[mid].first].name.get()
 				<< ")" << std::endl;
 
 #if 0
@@ -440,12 +441,12 @@ int run(const options& opt)
 			std::cout << std::endl;
 #endif
 			for(std::vector<std::pair<StationID, bool> >::const_iterator
-				itr = ol.stations.begin();
-				itr != ol.stations.end(); ++itr)
+				itr = cur_stations.begin();
+				itr != cur_stations.end(); ++itr)
 			{
 				std::cout
-					<< ((itr == ol.stations.begin()) ? "\t// " : " - ")
-					<< file.stations[itr->first].name
+					<< ((itr == cur_stations.begin()) ? "\t// " : " - ")
+					<< file.stations.get()[itr->first].name.get()
 					<< (itr->second ? "" : "(p)");
 			}
 			std::cout << std::endl;
@@ -488,10 +489,10 @@ int run(const options& opt)
 			edge_type_t last_edge_type = edge_type_t::duplicate_further;
 
 			for(std::vector<std::pair<StationID, bool>>::const_iterator
-				itr = ol.stations.begin() + 1;
-				itr != ol.stations.end(); ++itr)
+				itr = cur_stations.begin() + 1;
+				itr != cur_stations.end(); ++itr)
 			{
-				const bool first = itr == ol.stations.begin();
+				const bool first = itr == cur_stations.begin();
 
 				edge_type_t edge_type = edge_type_t::unique;
 
@@ -500,7 +501,7 @@ int run(const options& opt)
 				else
 				{
 					for(std::vector<std::pair<StationID, bool>>::const_iterator
-						itr2 = ol.stations.begin();
+						itr2 = cur_stations.begin();
 						!(int)edge_type && itr2 != itr; ++itr2)
 						// itr2 < itr => itr2 + 1 is valid
 						// itr == begin => for loop is not run => itr - 1 is valid
@@ -510,7 +511,7 @@ int run(const options& opt)
 					if(!first)
 					for(std::vector<std::pair<StationID, bool>>::const_iterator
 						itr2 = itr + 1;
-						!(int)edge_type && itr2 != ol.stations.end(); ++itr2)
+						!(int)edge_type && itr2 != cur_stations.end(); ++itr2)
 						// itr2 > itr => itr2 - 1 is valid
 						// !first => itr - 1 is valid
 						if(*(itr2 - 1) == *itr && *itr2 == (*(itr - 1)) )
@@ -530,7 +531,7 @@ int run(const options& opt)
 				if(edge_type != edge_type_t::duplicate_further)
 				 print_station(" -> ", *itr);
 
-				if(file.stations.find(itr->first) == file.stations.end())
+				if(file.stations.get().find(itr->first) == file.stations.get().end())
 				{
 					std::cerr << "Could not find station id " << itr->first << std::endl;
 					throw std::runtime_error("invalid station id in order list");
