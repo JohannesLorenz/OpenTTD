@@ -31,6 +31,24 @@ namespace dtl {
 	}
 }
 
+const char* strings[s_size] =
+{
+	"unit_number",
+	"is_cycle",
+	"is_bicycle",
+	"min_station",
+	"cargo",
+	"stations",
+	"real_stations",
+	"name",
+	"x",
+	"y",
+	"order_lists",
+	"cargo_names"
+};
+
+const char* string_no(std::size_t id) { return strings[id]; }
+
 bool order_list::operator<(const order_list &other) const
 {
 	return (min_station == other.min_station)
@@ -56,6 +74,28 @@ void deserialize(order_list &ol, std::istream &i)
 	deserialize(ol.min_station, i);
 	deserialize(ol.cargo, i);
 	deserialize(ol.stations, i);
+}
+
+json_ifile& json_ifile::once(order_list& ol)
+{
+	bool ret = _try(ol.unit_number)
+		|| _try(ol.is_cycle)
+		|| _try(ol.is_bicycle)
+		|| _try(ol.min_station)
+		|| _try(ol.cargo)
+		|| _try(ol.stations);
+	if(ret) return *this;
+	else throw "no key for order_list matched the found key";
+}
+
+json_ofile& json_ofile::operator<<(const order_list& ol)
+{
+	return *this << ol.unit_number
+		<< ol.is_cycle
+		<< ol.is_bicycle
+		<< ol.min_station
+		<< ol.cargo
+		<< ol.stations;
 }
 
 void serialize(const station_info &si, std::ostream &o)
