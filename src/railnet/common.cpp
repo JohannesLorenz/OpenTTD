@@ -44,24 +44,26 @@ const char* strings[s_size] =
 	"x",
 	"y",
 	"order_lists",
-	"cargo_names"
+	"cargo_names",
+	"version",
+	"filetype"
 };
 
 const char* string_no(std::size_t id) { return strings[id]; }
 
-bool order_list::operator<(const order_list &other) const
+/*bool order_list::operator<(const order_list &other) const
 {
 	return (min_station == other.min_station)
 		? real_stations < other.real_stations
 		: min_station < other.min_station;
-}
+}*/
 
 void serialize(const order_list &ol, std::ostream &o)
 {
 	serialize(ol.unit_number, o);
 	serialize(ol.is_cycle, o);
 	serialize(ol.is_bicycle, o);
-	serialize(ol.min_station, o);
+//	serialize(ol.min_station, o);
 	serialize(ol.cargo, o);
 	serialize(ol.stations, o);
 }
@@ -71,21 +73,28 @@ void deserialize(order_list &ol, std::istream &i)
 	deserialize(ol.unit_number, i);
 	deserialize(ol.is_cycle, i);
 	deserialize(ol.is_bicycle, i);
-	deserialize(ol.min_station, i);
+//	deserialize(ol.min_station, i);
 	deserialize(ol.cargo, i);
 	deserialize(ol.stations, i);
 }
 
-json_ifile& json_ifile::once(order_list& ol)
+bool json_ifile::once(order_list& ol)
 {
 	bool ret = _try(ol.unit_number)
 		|| _try(ol.is_cycle)
 		|| _try(ol.is_bicycle)
-		|| _try(ol.min_station)
+//		|| _try(ol.min_station)
 		|| _try(ol.cargo)
 		|| _try(ol.stations);
-	if(ret) return *this;
-	else throw "no key for order_list matched the found key";
+	if(ret)
+	 return true;
+	else
+	{
+		if(recent == "[")
+		 recent.clear();
+		else
+		 throw "error";
+		return false;		}
 }
 
 json_ofile& json_ofile::operator<<(const order_list& ol)
@@ -93,7 +102,7 @@ json_ofile& json_ofile::operator<<(const order_list& ol)
 	return *this << ol.unit_number
 		<< ol.is_cycle
 		<< ol.is_bicycle
-		<< ol.min_station
+//		<< ol.min_station
 		<< ol.cargo
 		<< ol.stations;
 }
@@ -112,6 +121,28 @@ void deserialize(station_info &si, std::istream &i)
 	deserialize(si.y, i);
 }
 
+bool json_ifile::once(station_info& si)
+{
+	bool ret = _try(si.name)
+		|| _try(si.x)
+		|| _try(si.y);
+	if(ret)
+	 return true;
+	else
+	{
+		if(recent == "[")
+		 recent.clear();
+		else
+		 throw "error";
+		return false;	}
+}
+
+json_ofile& json_ofile::operator<<(const station_info& si)
+{
+	return *this << si.name
+		<< si.x
+		<< si.y;
+}
 void serialize(const railnet_file_info &file, std::ostream &o)
 {
 	serialize(file.hdr, o);
@@ -133,6 +164,37 @@ void deserialize(railnet_file_info &file, std::istream &i)
 	deserialize(file.stations, i);
 	deserialize(file.cargo_names, i);
 }
+bool json_ifile::once(railnet_file_info& fi)
+{
+	smem<std::string, s_filetype> filetype;
+	smem<uint, s_version> version;
+	// TODO: check version + filetype	
+	bool ret = _try(filetype)
+		|| _try(version)
+		|| _try(fi.order_lists)
+		|| _try(fi.stations)
+		|| _try(fi.cargo_names);
+	if(ret)
+	 return true;
+	else
+	{
+		if(recent == "[")
+		 recent.clear();
+		else
+		 throw "error";
+		return false;
+	}
+/*	if(ret) return *this;
+	else throw "no key for railnet_file_info matched the found key"; */
+}
 
+json_ofile& json_ofile::operator<<(const railnet_file_info& fi)
+{
+	return *this << railnet_file_info::hdr
+		<< railnet_file_info::version
+		<< fi.order_lists
+		<< fi.stations
+		<< fi.cargo_names;
+}
 }
 

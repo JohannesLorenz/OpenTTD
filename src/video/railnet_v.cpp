@@ -21,6 +21,7 @@
 #include "../strings_func.h"
 #include "railnet_v.h"
 #include "../railnet/common.h"
+#include "../railnet/railnet_node_list.h"
 #include "../vehicle_func.h"
 #include "../depot_base.h"
 
@@ -249,14 +250,13 @@ class AddStation : DumpStation {
 	OrderNonStopFlags nst;
 	const visited_path_t& vp;
 	comm::order_list* new_ol;
-	void addNode (const st_node_t& node, bool stops) const
-	{
+	void addNode (const st_node_t& node, bool stops) const {
 		const StationID sid = node.sid;
-		if (new_ol->stations.empty() || sid != new_ol->stations.back().first) {
-			new_ol->stations.push_back(std::make_pair(sid, stops));
-			if (stops) {
-				new_ol->min_station = std::min(new_ol->min_station, sid);
-			}
+		if (new_ol->stations().empty() || sid != new_ol->stations().back().first) {
+			new_ol->stations().push_back(std::make_pair(sid, stops));
+/*			if (stops) {
+				new_ol->min_station() = std::min(new_ol->min_station(), sid);
+			}*/
 		}
 	}
 public:
@@ -289,7 +289,7 @@ public:
 
 void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Train* train,
 	std::vector<bool>& stations_used, std::set<CargoLabel>& cargo_used,
-	std::set<const OrderList*>& order_lists_done) const
+	std::set<const OrderList*>& order_lists_done, const node_list_t& node_list) const
 {
 	comm::order_list new_ol;
 
@@ -310,7 +310,7 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 		if (v->cargo_cap) {
 			if (CargoSpec::Get(v->cargo_type)->IsValid()) {
 				CargoLabel lbl = CargoSpec::Get(v->cargo_type)->label;
-				new_ol.cargo.insert(lbl);
+				new_ol.cargo().insert(lbl);
 #ifdef DEBUG_GRAPH_CARGO
 				std::cerr << " " << (char)(lbl >> 24)
 					<< (char)((lbl >> 16) & 0xFF)
@@ -445,13 +445,13 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 				return;
 			}
 
-			if (new_ol.stations.size()) {
-				if (new_ol.stations.front().first != new_ol.stations.back().first) {
+			if (new_ol.stations().size()) {
+				if (new_ol.stations().front().first != new_ol.stations().back().first) {
 				 throw "first and last stations differ!";
 				} else {
 					// we do this for cycle detection etc
-					new_ol.stations.front().second = new_ol.stations.back().second;
-					new_ol.stations.pop_back();
+					new_ol.stations().front().second = new_ol.stations().back().second;
+					new_ol.stations().pop_back();
 				}
 			}
 			else return;
@@ -461,91 +461,55 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 		else return; // only useless cases
 	}
 
-
-	for (std::vector<std::pair<StationID, bool> >::const_iterator itr
-		= new_ol.stations.begin();
-		itr != new_ol.stations.end(); ++itr) {
-		new_ol.real_stations += itr->second;
-	}
-
-	typedef std::multiset<comm::order_list>::iterator it;
-	std::pair<it, it> itrs = file.order_lists.equal_range(new_ol);
+	typedef std::vector<comm::order_list>::iterator it;
 	bool this_is_a_new_line = true;
-	if (new_ol.stations.empty()) {
+	if (new_ol.stations().empty()) {
 		this_is_a_new_line = false; // consider this already added
-	} else for (it itr=itrs.first; itr!=itrs.second; ++itr) {
-		// from the multiset, we can assume:
-		// min_station == other.min_station
-		// real_stations == other.real_stations
+	} else {
+		std::vector<UnitID> matches;
 
-		// g++ disabled this because modifying the element might
-		// change the correct order. however, we do only changes
-		// for the cycle bits, they have no effect.
-		comm::order_list& already_added = const_cast<comm::order_list&>(*itr);
-
-		// if the cargo types are no subsets, then it is another line
 		bool added_is_subset = std::includes(new_ol.cargo.begin(), new_ol.cargo.end(),
 			already_added.cargo.begin(), already_added.cargo.end());
 		bool new_is_subset = std::includes(already_added.cargo.begin(), already_added.cargo.end(),
 			new_ol.cargo.begin(), new_ol.cargo.end());
-		if (added_is_subset || new_is_subset) {
-			std::size_t start_found = 0;
-			std::vector<std::pair<StationID, bool> >::const_iterator sitr
-				= already_added.stations.begin();
-			for ( ;
-				sitr != already_added.stations.end()
-				; ++sitr, ++start_found)
-			if (sitr->first == new_ol.stations.front().first) {
-				// start station found in already added order list
-				bool same_order = false;
-
-				std::size_t sz = new_ol.stations.size();
-				if (sz == already_added.stations.size()) {
-					same_order = true;
-					for (std::size_t i = 0; i < sz; ++i)
-					 same_order = same_order && (new_ol.stations[i]
-						== already_added.stations[(start_found+i)%sz]);
-				}
-
-				if (same_order) {
+				
+				bool is_same = node_list.traverse(new_ol, &matches, false) & is_same_train,
+					is_rev = false;
+				if(!is_same)
+					is_rev = 
+				if(node_list.traverse(new_ol, &matches, false) & is_same_train) {
 					// case 1: order + direction are the same,
 					// just the starting point is maybe different
 					// nothing to do
+					
+					// trains with the same path and the same cargo are being treated as one line
+					// reasons: 1. easier to overview
+					//          2. if you have 3 trains, one carrying A, one B and one A and B,
+					//             do you want 3 lines? probably not...
 					this_is_a_new_line = false;
+					
+					if(matches.size() != 1)
+					 throw "expected exactly one match!";
+					
+					// this is a bit stupid...
+					std::v
 
-					already_added.cargo.insert(new_ol.cargo.begin(), new_ol.cargo.end());
-					cargo_used.insert(new_ol.cargo.begin(), new_ol.cargo.end());
-				}
-				else if (added_is_subset && new_is_subset && already_added.is_cycle) {
-					// check if it's the opposite order
-					bool equal = true;
-					int j = start_found;
-					for (int i = 0; i < (int)sz; ++i) {
-						if (new_ol.stations[i].second) {
-							bool finished = false;
-							for (; !finished; --j) {
-								const std::pair<StationID, bool>& other_stn
-									= already_added.stations[(j+sz)%sz];
-								if (other_stn.second) {
-									equal = equal && (new_ol.stations[i].first
-										== other_stn.first);
-									finished = true;
-								}
-							}
-						}
-					}
-
-					if (equal) {
-						already_added.is_cycle = false;
-						already_added.is_bicycle = true;
-						// for bicycle, no need to add another
-						this_is_a_new_line = false;
-					}
-				} // not same order
-			} // foreach start stations
-		}
-
-	} // for all already added order lists
+					added.cargo().insert(new_ol.cargo().begin(), new_ol.cargo().end());
+					cargo_used.insert(new_ol.cargo().begin(), new_ol.cargo().end());
+				} 
+				else if(added_is_subset && new_is_subset && already_added.is_cycle &&
+					(node_list.traverse(new_ol, &matches, true) & is_same_train) /* reverse order */ ) {
+					// why do we summarize cycles to bicycles? one reason is that trains of either direction
+					// usually have the same line
+					
+					// bicycles are represented by only one line
+					this_is_a_new_line = false;
+					
+					already_added.is_cycle = false;
+					already_added.is_bicycle = true;
+					// for bicycle, no need to add another
+				} // for all already added order lists
+	}
 
 	if (this_is_a_new_line) {
 		// add more information
@@ -553,8 +517,8 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 		// O(n^2), but less (0) mallocs than sort
 		// and earlier abort in many cases
 		for (std::vector<std::pair<StationID, bool> >::const_iterator sitr
-			= new_ol.stations.begin();
-				sitr != new_ol.stations.end(); ++sitr) {
+			= new_ol.stations().begin();
+				sitr != new_ol.stations().end(); ++sitr) {
 			stations_used[sitr->first] = true;
 			for (std::vector<std::pair<StationID, bool> >::const_iterator sitr2 = sitr;
 				sitr2 != sitr && unique; ++sitr2) {
@@ -562,20 +526,21 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 			}
 		}
 
-		for (std::set<CargoLabel>::const_iterator citr = new_ol.cargo.begin();
-			citr != new_ol.cargo.end(); ++citr) {
+		for (std::set<CargoLabel>::const_iterator citr = new_ol.cargo().begin();
+			citr != new_ol.cargo().end(); ++citr) {
 			cargo_used.insert(*citr);
 		}
 
-		new_ol.is_cycle = (new_ol.stations.size() > 2) && unique;
+		new_ol.is_cycle = (new_ol.stations().size() > 2) && unique;
 		// bi-cycle at this point is yet forbidden
 		// you could have a train running A->B->C->D->A->D->C->B,
 		// however, passengers wanting to go C->B might get
 		// confused that their train turns around
 
 		new_ol.unit_number = train->unitnumber;
-
-		file.order_lists.insert(new_ol);
+		
+		node_list.init_nodes(new_ol);
+		file.order_lists().insert(new_ol);
 	}
 }
 
@@ -595,10 +560,10 @@ void VideoDriver_Railnet::SaveStation(comm::railnet_file_info& file, const struc
 		SetDParam(0, st->index); GetString(buf, STR_STATION_NAME, lastof(buf));
 
 		comm::station_info tmp_station;
-		tmp_station.name = buf;
-		tmp_station.x = coord_of(MapSizeX() - TileX(center));
-		tmp_station.y = coord_of(MapSizeY() - TileY(center));
-		file.stations.insert(std::make_pair(st->index, tmp_station));
+		tmp_station.name.get() = buf;
+		tmp_station.x.get() = coord_of(MapSizeX() - TileX(center));
+		tmp_station.y.get() = coord_of(MapSizeY() - TileY(center));
+		file.stations().insert(std::make_pair(st->index, tmp_station));
 	}
 }
 
@@ -606,7 +571,7 @@ void VideoDriver_Railnet::SaveCargoLabels(comm::railnet_file_info &file, std::se
 {
 	int count = 0;
 	for (std::set<CargoLabel>::const_iterator itr = s.begin(); itr != s.end(); ++itr)
-	 file.cargo_names.insert(std::make_pair(++count, *itr));
+	 file.cargo_names().insert(std::make_pair(++count, *itr));
 }
 
 void VideoDriver_Railnet::MainLoop()
@@ -639,9 +604,10 @@ void VideoDriver_Railnet::MainLoop()
 
 	std::set<const OrderList*> order_lists_done;
 	std::cerr << "Calculating order lists... ";
+	node_list_t node_list;
 	FOR_ALL_TRAINS(train) {
 		std::cerr << std::setw(3) << cur_train*100/n_trains << "%";
-		SaveOrderList(file, train, stations_used, cargo_used, order_lists_done);
+		SaveOrderList(file, train, stations_used, cargo_used, order_lists_done, node_list);
 		std::cerr << "\b\b\b\b";
 		++cur_train;
 	}
@@ -673,7 +639,9 @@ void VideoDriver_Railnet::MainLoop()
 	std::cerr << "Calculating cargo labels..." << std::endl;
 	SaveCargoLabels(file, cargo_used);
 
-	std::cerr << "Serializing " << file.order_lists.size() << " order lists..." << std::endl;
-	serialize(file, std::cout);
+	std::cerr << "Serializing " << file.order_lists.get().size() << " order lists..." << std::endl;
+	//serialize(file, std::cout);
+	comm::json_ofile(std::cout) << file;
+
 }
 
