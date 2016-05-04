@@ -21,6 +21,7 @@
 #include <iosfwd>
 #include <limits>
 #include <cstring> // TODO: cpp?
+#include <list>
 
 #ifdef EXPORTER
 #include <cstdint>
@@ -58,6 +59,8 @@ enum s_id
 	s_y,
 	s_order_lists,
 	s_cargo_names,
+	s_version,
+	s_filetype,
 	s_size
 };
 
@@ -72,6 +75,8 @@ public:
 	const T& get() const { return val; }
 	operator T& () { return get(); }
 	operator const T& () const { return get(); }
+	T& operator()() { return get(); }
+	const T& operator()() const { return get(); }
 	smem() {}
 	smem(const T& val) : val(val) {}
 };
@@ -81,14 +86,13 @@ struct order_list
 	smem<UnitID, s_unit_number> unit_number;
 	smem<bool, s_is_cycle> is_cycle;
 	smem<bool, s_is_bicycle> is_bicycle; //! at least two trains that drive in opposite cycles
-	smem<StationID, s_min_station> min_station;
+//	smem<StationID, s_min_station> min_station;
 	smem<std::set<CargoLabel>, s_cargo> cargo; // cargo order and amount does not matter
 	smem<std::vector<std::pair<StationID, bool> >, s_stations> stations;
-	smem<std::size_t, s_real_stations> real_stations;
-	bool operator<(const order_list& other) const;
-	order_list() : is_cycle(false), is_bicycle(false),
+//	smem<std::size_t, s_real_stations> real_stations;
+	order_list() : is_cycle(false), is_bicycle(false)/*,
 		min_station(std::numeric_limits<StationID>::max()),
-		real_stations(0)
+		real_stations(0)*/
 	{
 	}
 #if 0
@@ -124,7 +128,7 @@ struct railnet_file_info
 {
 	static const std::string hdr;
 	static const uint version;
-	smem<std::multiset<order_list>, s_order_lists> order_lists;
+	smem<std::list<order_list>, s_order_lists> order_lists;
 	smem<std::map<StationID, station_info>, s_stations> stations;
 	smem<std::map<char, CargoLabel>, s_cargo_names> cargo_names;
 };
@@ -248,6 +252,8 @@ struct json_ofile
 {
 	std::ostream* os;
 
+json_ofile(std::ostream& os) : os(&os) {}
+
 json_ofile& operator<<(const bool& b) { *os << (b ? "true" : "false"); return *this; }
 json_ofile& operator<<(const byte& b) { *os << +b; return *this; }
 json_ofile& operator<<(const uint16& i) { *os << i; return *this; } 
@@ -272,19 +278,19 @@ json_ofile& operator<<(const Cont& v)
 	return *this;
 }
 
-// pairs are typically in containers
-// in order to not write the same struct member names 100 times,
-// we serialize pairs as arrays of size 2
-template<class T1, class T2>
-json_ofile& operator<<(const std::pair<T1, T2>& p)
-{
-	return *this << "[ " << p.first << ", " << p.second << " ]";
-}
+	// pairs are typically in containers
+	// in order to not write the same struct member names 100 times,
+	// we serialize pairs as arrays of size 2
+	template<class T1, class T2>
+	json_ofile& operator<<(const std::pair<T1, T2>& p)
+	{
+		return *this << "[ " << p.first << ", " << p.second << " ]";
+	}
 
 // TODO: -> cpp
-json_ofile& operator<<(const order_list& ol);
-json_ofile& operator<<(const station_info& si);
-json_ofile& operator<<(const railnet_file_info& file);
+	json_ofile& operator<<(const order_list& ol);
+	json_ofile& operator<<(const station_info& si);
+	json_ofile& operator<<(const railnet_file_info& file);
 
 	template<class S, class M>
 	struct _member
@@ -329,6 +335,9 @@ json_ifile& operator>>(const must_read<c>) {
 }
 	std::istream* is;
 	std::size_t depth;
+
+	json_ifile(std::istream& is) : is(&is) {}
+
 json_ifile& operator>>(bool& b) { char tmp[6]; *is >> tmp; b = !strncmp(tmp, "true", 4); return *this; } /* TODO: vulnerability! */
 json_ifile& operator>>(byte& b) { *is >> b; return *this; }
 json_ifile& operator>>(uint16& i) { *is >> i; return *this; }
@@ -346,7 +355,9 @@ struct read_raw
 	read_raw(T& ref) : ptr(&ref) {}
 };
 
-json_ifile& once(order_list& ol);
+bool once(order_list& ol);
+bool once(station_info& si);
+bool once(railnet_file_info& fi);
 
 std::string recent;
 
@@ -379,7 +390,7 @@ json_ifile& operator>>(Cont& v)
 		char sep;
 		*is >> sep;
 		if(sep == ',') {
-			typename Cont::value_type tmp;
+			typename dtl::noconst_value_type_of<Cont>::type tmp;
 			*this >> tmp;
 			dtl::push_back(v, tmp);
 		}
@@ -398,16 +409,17 @@ json_ifile& operator>>(std::pair<T1, T2>& p)
 }
 
 
-json_ifile& operator>>(order_list& ol);
-json_ifile& operator>>(station_info& si);
-json_ifile& operator>>(railnet_file_info& file);
+json_ifile& operator>>(order_list& ol) { return *this >> struct_dict(ol); }
+json_ifile& operator>>(station_info& si) { return *this >> struct_dict(si); }
+json_ifile& operator>>(railnet_file_info& file) { return *this >> struct_dict(file); }
 
 	template<class S>
 	class _struct_dict
 	{
-		S* ptr;
+		S* _ptr;
 	public:
-		_struct_dict(S& ref) : ptr(&ref) {}
+		S* the_struct() { return _ptr; }
+		_struct_dict(S& ref) : _ptr(&ref) {}
 	};
 
 
@@ -417,8 +429,9 @@ json_ifile& operator>>(railnet_file_info& file);
 
 	template<class S>
 	json_ifile& operator>>(_struct_dict<S> d) {
-		return *this >> must_read<'['>();
-		// TODO	
+		*this >> must_read<'['>();
+		while( once(*d.the_struct()) ) ;
+		return *this;
 	}
 };
 
