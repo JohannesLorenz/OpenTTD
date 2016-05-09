@@ -148,10 +148,10 @@ public:
 	//! traverses one order list
 	//! @param ol the order list
 	//! @return subset type of @a ol
-	int traverse(const comm::order_list& ol, const std::vector<UnitID>* matches,
+	int traverse(const comm::order_list& ol, std::vector<UnitID>* matches,
 		bool neg, bool ignore_cargo) const
 	{
-		if(*matches)
+		if(matches)
 		 matches->clear();
 
 		std::vector<StationID> stations;
@@ -212,7 +212,7 @@ public:
 				<< ", other: " << pr.first
 				<< " -> short? " << pr.second.can_be_short_train << std::endl;
 #endif
-			int tmp_mask |= (pr.second.can_be_short_train
+			int tmp_mask = (pr.second.can_be_short_train
 				? is_short_train : is_express_train);
 			if(pr.second.length == m_length) {
 				const auto& c_oth = cargo.at(pr.first);

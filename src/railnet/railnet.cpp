@@ -111,7 +111,7 @@ int run(const options& opt)
 	for(auto itr = file.order_lists.get().begin(); itr != file.order_lists.get().end(); itr = next)
 	{
 		++(next = itr);
-		int type = nl.traverse(*itr, NULL, false);
+		int type = nl.traverse(*itr, NULL, false, false);
 
 		bool is_express = type & node_list_t::is_express_train,
 			is_short = type & node_list_t::is_short_train;
