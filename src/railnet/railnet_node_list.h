@@ -212,11 +212,7 @@ public:
 				<< ", other: " << pr.first
 				<< " -> short? " << pr.second.can_be_short_train << std::endl;
 #endif
-<<<<<<< c160e1ae9b277b151ad36c9dc45973d051d2d9d3
 			int tmp_mask = (pr.second.can_be_short_train
-=======
-			int tmp_mask |= (pr.second.can_be_short_train
->>>>>>> Tmp commit.
 				? is_short_train : is_express_train);
 			if(pr.second.length == m_length) {
 				const auto& c_oth = cargo.at(pr.first);
