@@ -81,16 +81,27 @@ public:
 	smem(const T& val) : val(val) {}
 };
 
+struct cargo_info
+{
+//	CargoLabel label;
+	bool fwd, rev;
+	int slice;
+	bool operator<(const cargo_info& rhs) const {
+		return (slice == rhs.slice) ? label < rhs.label
+			: slice < rhs.slice }
+};
+
 struct order_list
 {
 	smem<UnitID, s_unit_number> unit_number;
 	smem<bool, s_is_cycle> is_cycle;
 	smem<bool, s_is_bicycle> is_bicycle; //! at least two trains that drive in opposite cycles
 //	smem<StationID, s_min_station> min_station;
-	smem<std::set<CargoLabel>, s_cargo> cargo; // cargo order and amount does not matter
+	smem<std::map<CargoLabel, cargo_info>, s_cargo> cargo; // cargo order and amount does not matter
+	int next_cargo_slice;
 	smem<std::vector<std::pair<StationID, bool> >, s_stations> stations;
 //	smem<std::size_t, s_real_stations> real_stations;
-	order_list() : is_cycle(false), is_bicycle(false)/*,
+	order_list() : is_cycle(false), is_bicycle(false), next_cargo_slice(1) /*,
 		min_station(std::numeric_limits<StationID>::max()),
 		real_stations(0)*/
 	{
@@ -119,6 +130,15 @@ struct station_info
 			case 'x': return rd >> x;
 			case 'y': return rd >> y;
 			case 'n': return rd >> name;
+			default: throw "expected x, y or name";
+		}
+	}
+};
+
+struct railnet_file_info
+{
+	static const std::string hdr;
+	static const uint version;
 			default: throw "expected x, y or name";
 		}
 	}
@@ -357,15 +377,6 @@ struct read_raw
 
 bool once(order_list& ol);
 bool once(station_info& si);
-bool once(railnet_file_info& fi);
-
-std::string recent;
-
-template<class T, std::size_t S>
-bool _try(smem<T, S> & s)
-{
-	if(recent.empty())
-	 *this >> recent;
 	if(recent == string_no(S))
 	{
 		*this >> must_read<':'>() >> s.get();
