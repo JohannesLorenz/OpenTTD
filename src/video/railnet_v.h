@@ -22,7 +22,7 @@ namespace comm {
 class VideoDriver_Railnet : public VideoDriver_Null {
 	void SaveOrderList(comm::railnet_file_info& file, const Train *train,
 		std::vector<bool> &stations_used, std::set<CargoLabel> &cargo_used, std::set<const OrderList *> &order_lists_done,
-		const struct node_list_t& node_list) const;
+		struct node_list_t& node_list) const;
 	void SaveStation(comm::railnet_file_info& file, const struct BaseStation* st,
 		const std::vector<bool> &stations_used) const;
 	void SaveCargoLabels(comm::railnet_file_info &file, std::set<CargoLabel> &s) const;
