@@ -463,119 +463,131 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 		else return; // only useless cases
 	}
 
-	typedef std::vector<comm::order_list>::iterator it;
 	bool this_is_a_new_line = true;
 	if (new_ol.stations().empty()) {
 		this_is_a_new_line = false; // consider this already added
 	} else {
 		std::vector<UnitID> matches;
 
-		bool added_is_subset = std::includes(new_ol.cargo().begin(), new_ol.cargo().end(),
-			already_added.cargo().begin(), already_added.cargo().end());
-		bool new_is_subset = std::includes(already_added.cargo().begin(), already_added.cargo().end(),
+		comm::order_list* match = NULL;
+		bool is_same = node_list.traverse(new_ol, &matches, false, true) & node_list_t::is_same_train,
+			is_rev = false;
+		if(!is_same)
+			is_rev = node_list.traverse(new_ol, &matches, true, true) & node_list_t::is_same_train;
+
+		if(is_same || is_rev)
+		{
+			// duplicates are put together
+			// bicycles are represented by only one line
+			this_is_a_new_line = false;
+
+			if(matches.size() != 1)
+			 throw "expected exactly one match!";
+
+			// get the order list with the ID from matches
+			// unfortunately, we need to look it up by scanning the whole order list...
+			for(std::list<comm::order_list>::iterator it = file.order_lists().begin();
+				it != file.order_lists().end() && !match; ++it)
+			{
+				if(matches.front() == it->unit_number)
+				 match = &*it;
+			}
+			if(!match)
+			 throw "train ID not found, logical programmer error";
+		}
+
+/*		bool added_is_subset = std::includes(new_ol.cargo().begin(), new_ol.cargo().end(),
+			match->cargo().begin(), match->cargo().end());
+		bool new_is_subset = std::includes(match->cargo().begin(), match->cargo().end(),
 			new_ol.cargo().begin(), new_ol.cargo().end());
-				
-				bool is_same = node_list.traverse(new_ol, &matches, false, true) & node_list_t::is_same_train,
-					is_rev = false;
-				if(!is_same)
-					is_rev = node_list.traverse(new_ol, &matches, true, true) & node_list_t::is_same_train;
-				if(is_same) {
-					// case 1: order + direction are the same,
-					// just the starting point is maybe different
-					// nothing to do
-					
-					// trains with the same path and the same cargo are being treated as one line
-					// reasons: 1. easier to overview
-					//          2. if you have 3 trains, one carrying A, one B and one A and B,
-					//             do you want 3 lines? probably not...
-					this_is_a_new_line = false;
-					
-					if(matches.size() != 1)
-					 throw "expected exactly one match!";
-					
 
+		if(is_same)*/ {
+			// case 1: order + direction are the same,
+			// (just the starting point may be different)
 
-					order_list* match = NULL;
-					for(const std::list<order_list>::const_iterator it = file.order_lists.begin();
-						it != file.order_lists.end() && !match; ++it)
-					{
-						if(matches.front() == it->unit_number)
-						 match = &*it;
-					}
-					if(!match)
-					 throw "train ID not found, logical programmer error";
-					
+			// trains with the same path and the same cargo are being treated as one line
+			// reasons: 1. easier to overview
+			//          2. if you have 3 trains, one carrying A, one B and one A and B,
+			//             do you want 3 lines? probably not...
 
-					//	 1 1 1   2 2   3 3     4 4 4 5 5  <- match
-					//	 0   0 0   0 0 0   0 0 0 0   0 0  <- new_ol
-					//	 6 1 6 7 2 8 7 9 3 7 7 A A 4 B B
-					//	=> everything in the new list gets a new number
-					//	algorithm:
-					//	(1) all new cargos get a separate number
-					//	       7     7     7 7      
-					//	(2) all other cargos get inverted iff they are in the new list:
-					//	-1 1-1   2-2  -3 3    -4-4 4-5-5
-					//	(3) obvious...
-					
-					// step (1) + (2)
-					int reserved_for_new = match->next_cargo_slice++;
-					for(std::map<CargoLabel, cargo_info>::const_iterator new_i = new_ol.cargo.begin();
-						new_i != new_ol.cargo.end(); ++new_i)
-					{
-						std::set<cargo_info>::const_iterator in_match = match->cargo.find(new_i->first);
-						if(in_match == match->cargo.end())
-						{ // step (1)
-							match->cargo.insert(cargo_info { new_i->first, true, false, reserved_for_new });
-						}
-						else
-						{ // step (2)
-							in_match->second.slice = -in_match->second.slice;
-						}
-					}
-					// step (3)
-					int recent_slice = -1;
-					for(std::set<cargo_info>::const_iterator match_i = match->cargo.begin();
-						match_i != match->cargo.end(); ++match_i)
-					{
-						if(recent_slice != match->second.slice &&
-							recent_slice != -match->second.slice)
-						{
-							++match->next_cargo_slice;
-							recent_slice = match->second.slice;
-						}
-						if(match_i->se
-						match_i->second.slice = match->next_cargo_slice;
-					}
+			//	 1 1 1   2 2   3 3     5 5 4 4 5  <- match
+			//	 0   0 0   0 0 0   0 0 0   0 0 0  <- new_ol
+			//	 6 1 6 7 2 8 7 9 3 7 7 A 5 B B A  <- result
+			//	=> everything in the new list gets a new number
+			//	algorithm:
+			//	(1) all new cargo get a separate number
+			//	       7     7     7 7
+			//	(2) all other cargo get inverted iff they are in the new list:
+			//	-1 1-1   2-2  -3 3    -5 5-4-4-5
+			//	(3) renumber the negated cargo
+			//
 
-					// all cargo not found => one new id
-					// all cargo found => one new id 
-					for(std::set<cargo_info>::const_iterator match_i = match->cargo.begin(),
-						new_i = new_ol.cargo.begin();
-						match_i != match->cargo.end() && new_i != new_ol.cargo.end();
-						)
-					{
-						if(new_i->slice < match_i->slice)
-						{
-							// match does not 
-						}
-					}
-					match->
+			// step (1) + (2)
+			int reserved_for_new = match->next_cargo_slice++;
+			for(std::map<CargoLabel, comm::cargo_info>::const_iterator new_i = new_ol.cargo().begin();
+				new_i != new_ol.cargo().end(); ++new_i)
+			{
+//				std::set<comm::cargo_info>::const_iterator in_match = match->cargo().find(new_i->first);
+				std::map<CargoLabel, comm::cargo_info>::iterator in_match
+					= match->cargo().find(new_i->first);
+				if(in_match == match->cargo().end())
+				{ // step (1)
+					match->cargo().insert(std::make_pair(
+						new_i->first,
+						comm::cargo_info {true, false, reserved_for_new }
+						));
+				}
+				else
+				{ // step (2)
+			//		in_match->second.slice = -in_match->second.slice;
+					in_match->second.slice += match->next_cargo_slice;
+				}
+			}
+	/*		// step (3)
+			int recent_slice = -1;
+			for(std::set<cargo_info>::const_iterator match_i = match->cargo.begin();
+				match_i != match->cargo.end(); ++match_i)
+			{
+				if(recent_slice != match->second.slice &&
+					recent_slice != -match->second.slice)
+				{
 					++match->next_cargo_slice;
+					recent_slice = match->second.slice;
+				}
+				if(match_i->se
+				 match_i->second.slice = match->next_cargo_slice;
+			}*/
+#if 0
+			// all cargo not found => one new id
+			// all cargo found => one new id
+			for(std::set<cargo_info>::const_iterator match_i = match->cargo.begin(),
+				new_i = new_ol.cargo.begin();
+				match_i != match->cargo.end() && new_i != new_ol.cargo.end();
+				)
+			{
+				if(new_i->slice < match_i->slice)
+				{
+					// match does not
+				}
+			}
+			match->
+			++match->next_cargo_slice;
 
-					added.cargo().insert(new_ol.cargo().begin(), new_ol.cargo().end());
-					cargo_used.insert(new_ol.cargo().begin(), new_ol.cargo().end());
-				} 
-				else if(added_is_subset && new_is_subset && already_added.is_cycle && is_rev ) {
-					// why do we summarize cycles to bicycles? one reason is that trains of either direction
-					// usually have the same line
-					
-					// bicycles are represented by only one line
-					this_is_a_new_line = false;
-					
-					already_added.is_cycle = false;
-					already_added.is_bicycle = true;
-					// for bicycle, no need to add another
-				} // for all already added order lists
+			added.cargo().insert(new_ol.cargo().begin(), new_ol.cargo().end());
+			cargo_used.insert(new_ol.cargo().begin(), new_ol.cargo().end());
+#endif
+		}
+#if 0
+		else if(added_is_subset && new_is_subset && already_added.is_cycle && is_rev) {
+			// why do we summarize cycles to bicycles? one reason is that trains of either direction
+			// usually have the same line
+
+			already_added.is_cycle = false;
+			already_added.is_bicycle = true;
+			already_added.rev_unit_no = cur_ol.unit_number;
+			// for bicycle, no need to add another
+		} // for all already added order lists
+#endif
 	}
 
 	if (this_is_a_new_line) {
@@ -593,26 +605,26 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 			}
 		}
 
-		for (std::set<CargoLabel>::const_iterator citr = new_ol.cargo().begin();
+		for (std::map<CargoLabel, comm::cargo_info>::const_iterator citr = new_ol.cargo().begin();
 			citr != new_ol.cargo().end(); ++citr) {
-			cargo_used.insert(*citr);
+			cargo_used.insert(citr->first);
 		}
 
-	for (Vehicle *v = train->orders.list->GetFirstSharedVehicle(); v != NULL; v = v->Next()) {
-		if (v->cargo_cap) {
-			if (CargoSpec::Get(v->cargo_type)->IsValid()) {
-				CargoLabel lbl = CargoSpec::Get(v->cargo_type)->label;
-				new_ol.cargo().insert(cargo_info { lbl, true, false, 0 } );
+		for (Vehicle *v = train->orders.list->GetFirstSharedVehicle(); v != NULL; v = v->Next()) {
+			if (v->cargo_cap) {
+				if (CargoSpec::Get(v->cargo_type)->IsValid()) {
+					CargoLabel lbl = CargoSpec::Get(v->cargo_type)->label;
+					new_ol.cargo().insert(std::make_pair(lbl, comm::cargo_info {true, false, 0 } ));
 #ifdef DEBUG_GRAPH_CARGO
-				std::cerr << " " << (char)(lbl >> 24)
-					<< (char)((lbl >> 16) & 0xFF)
-					<< (char)((lbl >> 8) & 0xFF)
-					<< (char)(lbl & 0xFF)
-					;
+					std::cerr << " " << (char)(lbl >> 24)
+						<< (char)((lbl >> 16) & 0xFF)
+						<< (char)((lbl >> 8) & 0xFF)
+						<< (char)(lbl & 0xFF)
+						;
 #endif
+				}
 			}
 		}
-	}
 
 		new_ol.is_cycle = (new_ol.stations().size() > 2) && unique;
 		// bi-cycle at this point is yet forbidden

@@ -48,6 +48,7 @@ class s
 enum s_id
 {
 	s_unit_number,
+	s_rev_unit_no,
 	s_is_cycle,
 	s_is_bicycle,
 	s_min_station,
@@ -61,6 +62,10 @@ enum s_id
 	s_cargo_names,
 	s_version,
 	s_filetype,
+	s_label, // TODO: required?
+	s_fwd, // TODO: req?
+	s_rev, // TODO: req?
+	s_slice,
 	s_size
 };
 
@@ -83,17 +88,19 @@ public:
 
 struct cargo_info
 {
-//	CargoLabel label;
-	bool fwd, rev;
-	int slice;
-	bool operator<(const cargo_info& rhs) const {
+//	smem<CargoLabel, s_label> label;
+	smem<bool, s_fwd> fwd;
+	smem<bool, s_rev> rev;
+	smem<int, s_slice> slice;
+/*	bool operator<(const cargo_info& rhs) const {
 		return (slice == rhs.slice) ? label < rhs.label
-			: slice < rhs.slice }
+	    : slice < rhs.slice }*/
 };
 
 struct order_list
 {
 	smem<UnitID, s_unit_number> unit_number;
+	smem<UnitID, s_rev_unit_no> rev_unit_no;
 	smem<bool, s_is_cycle> is_cycle;
 	smem<bool, s_is_bicycle> is_bicycle; //! at least two trains that drive in opposite cycles
 //	smem<StationID, s_min_station> min_station;
@@ -135,6 +142,7 @@ struct station_info
 	}
 };
 
+/*
 struct railnet_file_info
 {
 	static const std::string hdr;
@@ -142,7 +150,7 @@ struct railnet_file_info
 			default: throw "expected x, y or name";
 		}
 	}
-};
+};*/
 
 struct railnet_file_info
 {
@@ -179,6 +187,7 @@ inline void serialize(const byte& b, std::ostream& o) { dtl::wrt(b, o); }
 inline void serialize(const uint16& i, std::ostream& o) { dtl::wrt(i, o); }
 inline void serialize(const uint32& i, std::ostream& o) { dtl::wrt(i, o); }
 inline void serialize(const bool& b, std::ostream& o) { dtl::wrt(b, o); }
+inline void serialize(const int& i, std::ostream& o) { dtl::wrt(i, o); }
 inline void serialize(const char& c, std::ostream& o) { dtl::wrt(c, o); }
 inline void serialize(const float& f, std::ostream& o) { dtl::wrt(f, o); }
 
@@ -186,6 +195,7 @@ inline void deserialize(byte& b, std::istream& i) { dtl::rd(b, i); }
 inline void deserialize(uint16& i, std::istream& is) { dtl::rd(i, is); }
 inline void deserialize(uint32& i, std::istream& is) { dtl::rd(i, is); }
 inline void deserialize(bool& b, std::istream& i) { dtl::rd(b, i); }
+inline void deserialize(int& i, std::istream& is) { dtl::rd(i, is); }
 inline void deserialize(char& c, std::istream& i) { dtl::rd(c, i); }
 inline void deserialize(float& f, std::istream& i) { dtl::rd(f, i); }
 
@@ -260,10 +270,12 @@ inline void serialize(const smem<T, S>& s, std::ostream& o) { serialize(s.get(),
 template<class T, std::size_t S>
 inline void deserialize(smem<T, S>& s, std::istream& i) { deserialize(s.get(), i); }
 
+void serialize(const cargo_info& ci, std::ostream& o);
 void serialize(const order_list& ol, std::ostream& o);
 void serialize(const station_info& si, std::ostream& o);
 void serialize(const railnet_file_info& file, std::ostream& o);
 
+void deserialize(cargo_info& ci, std::istream& i);
 void deserialize(order_list& ol, std::istream& i);
 void deserialize(station_info& si, std::istream &i);
 void deserialize(railnet_file_info& file, std::istream &i);
@@ -278,6 +290,7 @@ json_ofile& operator<<(const bool& b) { *os << (b ? "true" : "false"); return *t
 json_ofile& operator<<(const byte& b) { *os << +b; return *this; }
 json_ofile& operator<<(const uint16& i) { *os << i; return *this; } 
 json_ofile& operator<<(const uint32& i) { *os << i; return *this; }
+json_ofile& operator<<(const int& i) { *os << i; return *this; }
 json_ofile& operator<<(const std::size_t& i) { *os << i; return *this; }
 json_ofile& operator<<(const char& c) { *os << '"' << c << '"'; return *this; }
 json_ofile& operator<<(const float& f) { *os << f; return *this; }
@@ -310,6 +323,7 @@ json_ofile& operator<<(const Cont& v)
 // TODO: -> cpp
 	json_ofile& operator<<(const order_list& ol);
 	json_ofile& operator<<(const station_info& si);
+	json_ofile& operator<<(const cargo_info& ci);
 	json_ofile& operator<<(const railnet_file_info& file);
 
 	template<class S, class M>
@@ -341,88 +355,96 @@ json_ofile& operator<<(const Cont& v)
 
 struct json_ifile
 {
-template<char c>
-struct must_read
-{
-};
+	template<char c>
+	struct must_read
+	{
+	};
 
-template<char c>
-json_ifile& operator>>(const must_read<c>) {
-	char tmp;
-	*is >> tmp;
-	if(tmp != c) throw "parse error: inexpected char";
-	return *this;
-}
+	template<char c>
+	json_ifile& operator>>(const must_read<c>) {
+		char tmp;
+		*is >> tmp;
+		if(tmp != c) throw "parse error: inexpected char";
+		return *this;
+	}
 	std::istream* is;
 	std::size_t depth;
 
 	json_ifile(std::istream& is) : is(&is) {}
 
-json_ifile& operator>>(bool& b) { char tmp[6]; *is >> tmp; b = !strncmp(tmp, "true", 4); return *this; } /* TODO: vulnerability! */
-json_ifile& operator>>(byte& b) { *is >> b; return *this; }
-json_ifile& operator>>(uint16& i) { *is >> i; return *this; }
-json_ifile& operator>>(uint32& i) { *is >> i; return *this; }
-json_ifile& operator>>(std::size_t& i) { *is >> i; return *this; }
-static void assert_q(char c) { if(c!='"') throw "parse error, expected '\"'"; }
-json_ifile& operator>>(char& c) { char tmp; *is >> tmp; assert_q(tmp); *is >> c; *is >> tmp; assert_q(tmp); return *this; }
-json_ifile& operator>>(float& f) { *this >> f; return *this; }
-json_ifile& operator>>(std::string& s) { char tmp; *is >> tmp; assert_q(tmp); *is >> s; *is >> tmp; assert_q(tmp); return *this; }
+	json_ifile& operator>>(bool& b) { char tmp[6]; *is >> tmp; b = !strncmp(tmp, "true", 4); return *this; } /* TODO: vulnerability! */
+	json_ifile& operator>>(byte& b) { *is >> b; return *this; }
+	json_ifile& operator>>(uint16& i) { *is >> i; return *this; }
+	json_ifile& operator>>(uint32& i) { *is >> i; return *this; }
+	json_ifile& operator>>(int& i) { *is >> i; return *this; }
+	json_ifile& operator>>(std::size_t& i) { *is >> i; return *this; }
+	static void assert_q(char c) { if(c!='"') throw "parse error, expected '\"'"; }
+	json_ifile& operator>>(char& c) { char tmp; *is >> tmp; assert_q(tmp); *is >> c; *is >> tmp; assert_q(tmp); return *this; }
+	json_ifile& operator>>(float& f) { *this >> f; return *this; }
+	json_ifile& operator>>(std::string& s) { char tmp; *is >> tmp; assert_q(tmp); *is >> s; *is >> tmp; assert_q(tmp); return *this; }
 
-template<class T>
-struct read_raw
-{
-	T* ptr;
-	read_raw(T& ref) : ptr(&ref) {}
-};
-
-bool once(order_list& ol);
-bool once(station_info& si);
-	if(recent == string_no(S))
+	template<class T>
+	struct read_raw
 	{
-		*this >> must_read<':'>() >> s.get();
-		return true;
-	}
-	else return false;
-	
-}
+		T* ptr;
+		read_raw(T& ref) : ptr(&ref) {}
+	};
 
-template<class T>
-json_ifile& operator>>(read_raw<T>& r)
-{
-	return is >> *r.ptr;
-}
+	bool once(order_list& ol);
+	bool once(station_info& si);
+	bool once(cargo_info& ci);
 
-template<class Cont>
-json_ifile& operator>>(Cont& v)
-{
-	*this >> must_read<'['>();
-	while(true)
+	template<class T, std::size_t S>
+	bool _try(smem<T, S>& s)
 	{
-		char sep;
-		*is >> sep;
-		if(sep == ',') {
-			typename dtl::noconst_value_type_of<Cont>::type tmp;
-			*this >> tmp;
-			dtl::push_back(v, tmp);
+		if(recent.empty())
+		 *this >> recent;
+		if(recent == string_no(S))
+		{
+			*this >> must_read<':'>() >> s.get();
+			return true;
 		}
-		else if(sep == ']') break;
-		else throw "expected serparator: , or ]";
+		else return false;
 	}
-	return *this;
-}
+
+	template<class T>
+	json_ifile& operator>>(read_raw<T>& r)
+	{
+		return is >> *r.ptr;
+	}
+
+	template<class Cont>
+	json_ifile& operator>>(Cont& v)
+	{
+		*this >> must_read<'['>();
+		while(true)
+		{
+			char sep;
+			*is >> sep;
+			if(sep == ',') {
+				typename dtl::noconst_value_type_of<Cont>::type tmp;
+				*this >> tmp;
+				dtl::push_back(v, tmp);
+			}
+			else if(sep == ']') break;
+			else throw "expected serparator: , or ]";
+		}
+		return *this;
+	}
 
 
-template<class T1, class T2>
-json_ifile& operator>>(std::pair<T1, T2>& p)
-{
-	return *this >> must_read<'['>() >> p.first >> must_read<','>()
-		>> p.second >> must_read<']'>();
-}
+	template<class T1, class T2>
+	json_ifile& operator>>(std::pair<T1, T2>& p)
+	{
+		return *this >> must_read<'['>() >> p.first >> must_read<','>()
+			>> p.second >> must_read<']'>();
+	}
 
 
-json_ifile& operator>>(order_list& ol) { return *this >> struct_dict(ol); }
-json_ifile& operator>>(station_info& si) { return *this >> struct_dict(si); }
-json_ifile& operator>>(railnet_file_info& file) { return *this >> struct_dict(file); }
+	json_ifile& operator>>(order_list& ol) { return *this >> struct_dict(ol); }
+	json_ifile& operator>>(station_info& si) { return *this >> struct_dict(si); }
+	json_ifile& operator>>(cargo_info& ci) { return *this >> struct_dict(ci); }
+	json_ifile& operator>>(railnet_file_info& file) { return *this >> struct_dict(file); }
 
 	template<class S>
 	class _struct_dict
@@ -433,7 +455,7 @@ json_ifile& operator>>(railnet_file_info& file) { return *this >> struct_dict(fi
 		_struct_dict(S& ref) : _ptr(&ref) {}
 	};
 
-
+	std::string recent;
 
 	template<class S> // TODO: static?
 	_struct_dict<S> struct_dict(S& s) { return _struct_dict<S>(s); }
@@ -444,6 +466,9 @@ json_ifile& operator>>(railnet_file_info& file) { return *this >> struct_dict(fi
 		while( once(*d.the_struct()) ) ;
 		return *this;
 	}
+
+private:
+	bool once(railnet_file_info& fi);
 };
 
 } // namespace comm

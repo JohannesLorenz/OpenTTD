@@ -5,6 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cstdlib>
 #include <getopt.h>
 #include <iostream>
 #include "railnet_options.h"
@@ -38,10 +39,10 @@ options::options(int argc, char** argv)
 
 		switch (c) {
 		case 0:
-			printf("option %s", long_options[option_index].name);
-			if (optarg)
-				printf(" with arg %s", optarg);
-			printf("\n");
+		//	std::cerr << "option " << long_options[option_index].name;
+		//	if (optarg)
+		//		printf(" with arg %s", optarg);
+		//	printf("\n");
 			break;
 		case 'l':
 			command = cmd_list_cargo;
@@ -85,7 +86,7 @@ options::options(int argc, char** argv)
 			exit(0);
 			break;
 		default:
-			printf("?? getopt returned character code 0%o ??\n", c);
+			std::cerr << "?? getopt returned character code 0%o ??" << std::endl;
 		}
 	}
 

@@ -34,6 +34,7 @@ namespace dtl {
 const char* strings[s_size] =
 {
 	"unit_number",
+	"rev_unit_no"
 	"is_cycle",
 	"is_bicycle",
 	"min_station",
@@ -46,7 +47,11 @@ const char* strings[s_size] =
 	"order_lists",
 	"cargo_names",
 	"version",
-	"filetype"
+	"filetype",
+	"label",
+	"fwd",
+	"rev",
+	"slice"
 };
 
 const char* string_no(std::size_t id) { return strings[id]; }
@@ -137,6 +142,21 @@ bool json_ifile::once(station_info& si)
 		return false;	}
 }
 
+bool json_ifile::once(cargo_info& ci)
+{
+	bool ret = /*_try(ci.label) || */_try(ci.fwd) || _try(ci.rev)
+		|| _try(ci.slice); // TODO: just operator|| ?
+	if(ret)
+	 return true;
+	else
+	{
+		if(recent == "[")
+		 recent.clear();
+		else
+		 throw "error";
+		return false;	}
+}
+
 json_ofile& json_ofile::operator<<(const station_info& si)
 {
 	return *this << si.name
@@ -196,5 +216,27 @@ json_ofile& json_ofile::operator<<(const railnet_file_info& fi)
 		<< fi.stations
 		<< fi.cargo_names;
 }
+
+void serialize(const cargo_info& ci, std::ostream& o)
+{
+//	serialize(ci.label, o);
+	serialize(ci.fwd, o);
+	serialize(ci.rev, o);
+	serialize(ci.slice, o);
+}
+
+void deserialize(cargo_info& ci, std::istream& i)
+{
+//	deserialize(ci.label, i);
+	deserialize(ci.fwd, i);
+	deserialize(ci.rev, i);
+	deserialize(ci.slice, i);
+}
+
+json_ofile&json_ofile::operator<<(const cargo_info& ci)
+{
+	return *this <</* ci.label <<*/ ci.fwd << ci.rev << ci.slice;
+}
+
 }
 
