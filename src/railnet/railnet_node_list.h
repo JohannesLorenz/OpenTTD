@@ -30,8 +30,35 @@ public:
 		 if(pr.second) /* if train stops */
 		  visit(unit_no, pr.first, nth++);
 		lengths[unit_no] = nth;
-		for(const auto& c : ol.cargo.get())
-		 cargo[unit_no].insert(c);
+		bool has_rev = false;
+		for(const std::pair<const CargoLabel, comm::cargo_info>& c :
+			ol.cargo())
+		{
+			if(c.second.fwd)
+			 cargo[unit_no].insert(c.first);
+			if(c.second.rev)
+			 has_rev = true;
+		}
+
+		if(has_rev) // TODO: common func, avoid code dupl?
+		{
+			nth = 0;
+			unit_no = ol.rev_unit_no;
+			for(std::vector<std::pair<StationID, bool>>::const_reverse_iterator
+				r = ol.stations.get().rbegin();
+				r != ol.stations.get().rend(); ++r)
+			{
+				if(r->second) // if train stops
+				 visit(unit_no, r->first, nth++);
+			}
+			lengths[unit_no] = nth;
+			for(const std::pair<CargoLabel, comm::cargo_info>& c :
+				ol.cargo())
+			{
+				if(c.second.rev)
+				 cargo[unit_no].insert(c.first);
+			}
+		}
 	}
 
 	enum direction_t
@@ -147,6 +174,8 @@ public:
 
 	//! traverses one order list
 	//! @param ol the order list
+	//! @param matches the resulting matches will be stored here if non NULL
+	//! @param neg whether to negate the direction of @a ol
 	//! @return subset type of @a ol
 	int traverse(const comm::order_list& ol, std::vector<UnitID>* matches,
 		bool neg, bool ignore_cargo) const

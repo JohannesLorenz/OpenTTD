@@ -92,9 +92,9 @@ int run(const options& opt)
 	{
 		++next;
 		bool cargo_found = false;
-		for(std::set<CargoLabel>::const_iterator itr2 = itr->cargo.get().begin();
+		for(std::map<CargoLabel, comm::cargo_info>::const_iterator itr2 = itr->cargo.get().begin();
 			!cargo_found && itr2 != itr->cargo.get().end(); ++itr2)
-		 cargo_found = (cargo_ids.find(*itr2) != cargo_ids.end());
+		 cargo_found = (cargo_ids.find(itr2->first) != cargo_ids.end());
 		if(!cargo_found)
 		 file.order_lists.get().erase(itr);
 	}
@@ -251,7 +251,7 @@ int run(const options& opt)
 			}
 			std::cout << std::endl;
 
-			auto print_end = [&](bool double_edge, const std::set<CargoLabel>& cargo)
+			auto print_end = [&](bool double_edge, const std::map<CargoLabel, comm::cargo_info>& cargo)
 			{
 				// values below 50 get difficult to read
 				float _value = 0.5f + (value/2.0f);
@@ -264,10 +264,10 @@ int run(const options& opt)
 				{
 					std::cout << ", label=\"";
 					bool first = true;
-					for(const int& id : cargo)
+					for(const std::pair<const CargoLabel, comm::cargo_info>& id : cargo)
 					{
 						std::cout << (first ? "" : ", ")
-							<< lbl_to_str.convert(id);
+							<< lbl_to_str.convert(id.first);
 						first = false;
 					}
 					std::cout << "\"";
