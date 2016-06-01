@@ -29,7 +29,29 @@ public:
 		for(const auto& pr : ol.stations.get())
 		 if(pr.second) /* if train stops */
 		  visit(unit_no, pr.first, nth++);
-		lengths[unit_no] = nth;
+		bool has_rev = false;
+		for(const std::pair<const CargoLabel, comm::cargo_info>& c :
+			ol.cargo())
+		 if(c.second.rev)
+		  has_rev = true;
+
+		if(has_rev) // TODO: common func, avoid code dupl?
+		{
+			nth = 0;
+			unit_no = ol.rev_unit_no;
+			for(std::vector<std::pair<StationID, bool>>::const_reverse_iterator
+				r = ol.stations.get().rbegin();
+				r != ol.stations.get().rend(); ++r)
+			 if(r->second) // if train stops
+			  visit(unit_no, r->first, nth++);
+		}
+	}
+
+	// to call this, the stations and cargo
+	void init_rest(const comm::order_list& ol)
+	{
+		UnitID unit_no = ol.unit_number;
+		lengths[unit_no] = ol.stations().size();
 		bool has_rev = false;
 		for(const std::pair<const CargoLabel, comm::cargo_info>& c :
 			ol.cargo())
@@ -42,16 +64,8 @@ public:
 
 		if(has_rev) // TODO: common func, avoid code dupl?
 		{
-			nth = 0;
 			unit_no = ol.rev_unit_no;
-			for(std::vector<std::pair<StationID, bool>>::const_reverse_iterator
-				r = ol.stations.get().rbegin();
-				r != ol.stations.get().rend(); ++r)
-			{
-				if(r->second) // if train stops
-				 visit(unit_no, r->first, nth++);
-			}
-			lengths[unit_no] = nth;
+			lengths[unit_no] = ol.stations().size();
 			for(const std::pair<CargoLabel, comm::cargo_info>& c :
 				ol.cargo())
 			{
@@ -60,6 +74,12 @@ public:
 			}
 		}
 	}
+
+	void init(const comm::order_list& ol) {
+		init_nodes(ol);
+		init_rest(ol);
+	}
+
 
 	enum direction_t
 	{
@@ -106,12 +126,15 @@ public:
 	//! @param itr the current station for which we need to find an equivalent
 	//! @param supersets the supersets set
 	//! @param itr_1 the previous station
-	void follow_to_node(const std::vector<StationID>::const_iterator& itr,
+	bool follow_to_node(const std::vector<StationID>::const_iterator& itr,
 		std::multimap<UnitID, super_info_t>& supersets,
 		const std::vector<StationID>::const_iterator& itr_1,
 		bool neg) const
 	{
-		const node_info_t& info = nodes.at(*itr);
+		const auto node_itr = nodes.find(*itr);
+		if(node_itr == nodes.end())
+		 return false;
+		const node_info_t* info = &node_itr->second;
 
 		auto next = supersets.begin();
 		for(auto sitr = supersets.begin(); sitr != supersets.end(); sitr = next)
@@ -122,7 +145,7 @@ public:
 			std::size_t& last_station_no = sitr->second.last_station_no;
 			std::size_t new_last_station_no = std::numeric_limits<std::size_t>::max();
 
-			const auto in_nodes = info.equal_range(cur_line);
+			const auto in_nodes = info->equal_range(cur_line);
 			std::size_t tmp = lengths.at(cur_line);
 			for(auto in_node = in_nodes.first;
 				in_node != in_nodes.second; ++in_node)
@@ -170,6 +193,7 @@ public:
 				last_station_no = new_last_station_no;
 			}
 		}
+		return true;
 	}
 
 	//! traverses one order list
@@ -177,7 +201,7 @@ public:
 	//! @param matches the resulting matches will be stored here if non NULL
 	//! @param neg whether to negate the direction of @a ol
 	//! @return subset type of @a ol
-	int traverse(const comm::order_list& ol, std::vector<UnitID>* matches,
+	int traverse(const comm::order_list& ol, std::map<UnitID, superset_type>* matches,
 		bool neg, bool ignore_cargo) const
 	{
 		if(matches)
@@ -201,7 +225,12 @@ public:
 		std::multimap<UnitID, super_info_t> supersets;
 
 		// find first node where the train stops
-		const node_info_t *station_0 = &nodes.at(stations[0]);
+		const node_info_t* station_0;
+		const auto itr_0 = nodes.find(stations[0]);
+		if(itr_0 == nodes.end())
+		 return no_supersets;
+		else
+		 station_0 = &itr_0->second;
 
 		// fill map for the first node
 		for(const auto& pr : *station_0)
@@ -228,7 +257,8 @@ public:
 
 		// follow the order list, find monotonically increasing superset line
 		for(auto itr = stations.begin() + 1; itr != stations.end(); ++itr)
-		 follow_to_node(itr, supersets, itr-1, neg);
+		 if(! follow_to_node(itr, supersets, itr-1, neg) )
+		  return no_supersets;
 		// last node: (end-1) -> (begin)
 		follow_to_node(stations.begin(), supersets, stations.end() - 1, neg);
 
@@ -253,7 +283,7 @@ public:
 			if(tmp_mask)
 			{
 				if(matches)
-				 matches->push_back(pr.first);
+				 (*matches)[pr.first] = (node_list_t::superset_type)tmp_mask;
 				result |= tmp_mask;
 			}
 		}

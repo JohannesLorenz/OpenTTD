@@ -29,8 +29,8 @@ enum station_flag_t
 void print_version()
 {
 	std::cerr << "version: <not specified yet>" << std::endl;
-	std::cerr << "railnet file version: " <<
-		comm::railnet_file_info::version << std::endl;
+	std::cerr << "railnet file version: (currently not implemented)" << std::endl;
+//		comm::railnet_file_info::version << std::endl;
 }
 
 void print_help()
@@ -60,7 +60,9 @@ public:
 int run(const options& opt)
 {
 	comm::railnet_file_info file;
-	deserialize(file, std::cin);
+//	deserialize(file, std::cin);
+	comm::json_ifile(std::cin) >> file;
+//	comm::json_ofile(std::cout) << file; // <- debugging only
 
 	/*
 		find out which cargo is used...
@@ -105,7 +107,7 @@ int run(const options& opt)
 	*/
 	node_list_t nl;
 	for(const comm::order_list& ol : file.order_lists.get())
-	 nl.init_nodes(ol);
+	 nl.init(ol);
 
 	auto next = file.order_lists.get().begin();
 	for(auto itr = file.order_lists.get().begin(); itr != file.order_lists.get().end(); itr = next)
@@ -370,6 +372,13 @@ int main(int argc, char** argv)
 	} catch(const char* s)
 	{
 		std::cerr << "Error: " << s << std::endl;
+		std::cerr << "Rest of file: ";
+		char buf[1024];
+		int count = 0;
+		while(std::cin.getline(buf, 1024) && ++count < 8) {
+			std::cerr << "* " << buf << std::endl;
+		}
+		std::cerr << "Exiting." << std::endl;
 		return EXIT_FAILURE;
 	}
 
