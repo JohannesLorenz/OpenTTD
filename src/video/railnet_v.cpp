@@ -14,6 +14,7 @@
 #include <vector>
 #include <set>
 #include <algorithm>
+#include <limits>
 
 #include "../vehicle_base.h"
 #include "../station_base.h"
@@ -38,24 +39,6 @@ VideoDriver_Railnet::VideoDriver_Railnet()
 }
 
 //template<class T> ... (function)
-
-namespace detail {
-
-	template<class T, T v>
-	struct integral_constant {
-		static const T value = v;
-		typedef T value_type;
-	};
-
-	typedef integral_constant<bool, true> true_type;
-	typedef integral_constant<bool, false> false_type;
-
-	template<class T, class U>
-	struct is_same : false_type {};
-
-	template<class T>
-	struct is_same<T, T> : true_type {};
-}
 
 //! tile + trackdir
 struct location_data {
@@ -467,9 +450,33 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 	if (new_ol.stations().empty()) {
 		this_is_a_new_line = false; // consider this already added
 	} else {
-		std::vector<UnitID> matches;
+		std::map<UnitID, node_list_t::superset_type> matches;
 
 		comm::order_list* match = NULL;
+
+		new_ol.unit_number = train->unitnumber;
+
+		// add all cargo from this train
+		for (Vehicle *v = train->orders.list->GetFirstSharedVehicle(); v != NULL; v = v->Next()) {
+			if (v->cargo_cap) {
+				if (CargoSpec::Get(v->cargo_type)->IsValid()) {
+					CargoLabel lbl = CargoSpec::Get(v->cargo_type)->label;
+					new_ol.cargo().insert(std::make_pair(lbl, comm::cargo_info {true, false, 0 } ));
+#ifdef DEBUG_GRAPH_CARGO
+					std::cerr << " " << (char)(lbl >> 24)
+						<< (char)((lbl >> 16) & 0xFF)
+						<< (char)((lbl >> 8) & 0xFF)
+						<< (char)(lbl & 0xFF)
+						;
+#endif
+				}
+			}
+		}
+
+		node_list.init_rest(new_ol);
+
+		// add new_ol to the other order lists from node_list
+		// if new_ol will be discarded, this will not harm (TODO: but may harm runtime...?)
 		bool is_same = node_list.traverse(new_ol, &matches, false, true) & node_list_t::is_same_train,
 			is_rev = false;
 		if(!is_same)
@@ -481,15 +488,25 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 			// bicycles are represented by only one line
 			this_is_a_new_line = false;
 
-			if(matches.size() != 1)
-			 throw "expected exactly one match!";
+			UnitID the_match = std::numeric_limits<UnitID>::max();
+			for(const std::pair<const UnitID, node_list_t::superset_type> pr : matches)
+			if(pr.second & node_list_t::is_same_train)
+			{
+				if(the_match == std::numeric_limits<UnitID>::max())
+				 the_match = pr.first;
+				else
+				 throw "expected only one match!";
+			}
+
+			if(the_match == std::numeric_limits<UnitID>::max())
+			 throw "expected some match!";
 
 			// get the order list with the ID from matches
 			// unfortunately, we need to look it up by scanning the whole order list...
 			for(std::list<comm::order_list>::iterator it = file.order_lists().begin();
 				it != file.order_lists().end() && !match; ++it)
 			{
-				if(matches.front() == it->unit_number)
+				if(the_match == it->unit_number)
 				 match = &*it;
 			}
 			if(!match)
@@ -501,7 +518,8 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 		bool new_is_subset = std::includes(match->cargo().begin(), match->cargo().end(),
 			new_ol.cargo().begin(), new_ol.cargo().end());
 
-		if(is_same)*/ {
+		if(is_same)*/
+		if(is_same || is_rev){
 			// case 1: order + direction are the same,
 			// (just the starting point may be different)
 
@@ -610,29 +628,11 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 			cargo_used.insert(citr->first);
 		}
 
-		for (Vehicle *v = train->orders.list->GetFirstSharedVehicle(); v != NULL; v = v->Next()) {
-			if (v->cargo_cap) {
-				if (CargoSpec::Get(v->cargo_type)->IsValid()) {
-					CargoLabel lbl = CargoSpec::Get(v->cargo_type)->label;
-					new_ol.cargo().insert(std::make_pair(lbl, comm::cargo_info {true, false, 0 } ));
-#ifdef DEBUG_GRAPH_CARGO
-					std::cerr << " " << (char)(lbl >> 24)
-						<< (char)((lbl >> 16) & 0xFF)
-						<< (char)((lbl >> 8) & 0xFF)
-						<< (char)(lbl & 0xFF)
-						;
-#endif
-				}
-			}
-		}
-
 		new_ol.is_cycle = (new_ol.stations().size() > 2) && unique;
 		// bi-cycle at this point is yet forbidden
 		// you could have a train running A->B->C->D->A->D->C->B,
 		// however, passengers wanting to go C->B might get
 		// confused that their train turns around
-
-		new_ol.unit_number = train->unitnumber;
 		
 		node_list.init_nodes(new_ol);
 		file.order_lists().push_back(new_ol);
@@ -706,7 +706,7 @@ void VideoDriver_Railnet::MainLoop()
 		std::cerr << "\b\b\b\b";
 		++cur_train;
 	}
-	std::cerr << std::endl;
+	std::cerr << "100%" << std::endl;
 
 	// did we forget any order list?
 	bool any_problems = false;
@@ -736,7 +736,7 @@ void VideoDriver_Railnet::MainLoop()
 
 	std::cerr << "Serializing " << file.order_lists.get().size() << " order lists..." << std::endl;
 	//serialize(file, std::cout);
+	//comm::json_ofile(std::cout) << comm::smem<comm::railnet_file_info, comm::s_railnet>(file);
 	comm::json_ofile(std::cout) << file;
-
 }
 

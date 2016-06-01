@@ -18,9 +18,6 @@
 
 namespace comm {
 
-const std::string railnet_file_info::hdr = "openttd/railnet";
-const uint railnet_file_info::version = 0;
-
 namespace dtl {
 	void _wrt(std::ostream& o, const char* raw, std::size_t sz) {
 		o.write(raw, sz);
@@ -34,7 +31,7 @@ namespace dtl {
 const char* strings[s_size] =
 {
 	"unit_number",
-	"rev_unit_no"
+	"rev_unit_no",
 	"is_cycle",
 	"is_bicycle",
 	"min_station",
@@ -51,7 +48,9 @@ const char* strings[s_size] =
 	"label",
 	"fwd",
 	"rev",
-	"slice"
+	"slice",
+	"railnet",
+	"mimetype",
 };
 
 const char* string_no(std::size_t id) { return strings[id]; }
@@ -83,27 +82,63 @@ void deserialize(order_list &ol, std::istream &i)
 	deserialize(ol.stations, i);
 }
 
+json_ifile&json_ifile::operator>>(bool& b)
+{
+	char tmp[6];
+	tmp[5]=tmp[4]=0;
+	*is >> tmp[0];
+	if(!chk_end(*tmp))
+	{
+		*is >> tmp[1];
+		*is >> tmp[2];
+		*is >> tmp[3];
+		if(!strncmp(tmp, "true", 4))
+			b = true;
+		else
+		{
+			*is >> tmp[4];
+			if(!strncmp(tmp, "false", 5))
+				b = false;
+			else throw "boolean must be 'true' or 'false'";
+		}
+	}
+	return *this;
+}
+
+json_ifile&json_ifile::operator>>(std::string& s)
+{
+	char tmp; *is >> tmp;
+	if(!chk_end(tmp)) {
+		assert_q(tmp);
+		do { is->get(tmp); if(tmp != '\"') s.push_back(tmp); } while (tmp != '\"');
+	}
+	return *this;
+}
+
 bool json_ifile::once(order_list& ol)
 {
 	bool ret = _try(ol.unit_number)
-		|| _try(ol.is_cycle)
-		|| _try(ol.is_bicycle)
-//		|| _try(ol.min_station)
-		|| _try(ol.cargo)
-		|| _try(ol.stations);
+			|| _try(ol.is_cycle)
+			|| _try(ol.is_bicycle)
+			//		|| _try(ol.min_station)
+			|| _try(ol.cargo)
+			|| _try(ol.stations);
+	recent.clear();
+
 	if(ret)
-	 return true;
+		return true;
 	else
 	{
-		if(recent == "[")
-		 recent.clear();
+		if(recent == "}")
+			recent.clear();
 		else
-		 throw "error";
+			throw "error";
 		return false;		}
 }
 
 json_ofile& json_ofile::operator<<(const order_list& ol)
 {
+	struct_guard _(*this);
 	return *this << ol.unit_number
 		<< ol.is_cycle
 		<< ol.is_bicycle
@@ -131,11 +166,12 @@ bool json_ifile::once(station_info& si)
 	bool ret = _try(si.name)
 		|| _try(si.x)
 		|| _try(si.y);
+	recent.clear();
 	if(ret)
 	 return true;
 	else
 	{
-		if(recent == "[")
+		if(recent == "}")
 		 recent.clear();
 		else
 		 throw "error";
@@ -146,22 +182,34 @@ bool json_ifile::once(cargo_info& ci)
 {
 	bool ret = /*_try(ci.label) || */_try(ci.fwd) || _try(ci.rev)
 		|| _try(ci.slice); // TODO: just operator|| ?
+	recent.clear();
 	if(ret)
 	 return true;
 	else
 	{
-		if(recent == "[")
+		if(recent == "}")
 		 recent.clear();
 		else
 		 throw "error";
 		return false;	}
 }
 
+json_ifile&json_ifile::operator>>(std::pair<char, CargoLabel>& pr)
+{
+	//TODO: avoid things like "short", they may not fit the 16bit scheme
+	std::pair<unsigned short, std::string> p2; // TODO: allow fixed size strings
+	*this >> p2;
+	pr.first = p2.first;
+	pr.second = 42; // TODO!
+	return *this;
+}
+
 json_ofile& json_ofile::operator<<(const station_info& si)
 {
+	struct_guard _(*this);
 	return *this << si.name
-		<< si.x
-		<< si.y;
+		     << si.x
+		     << si.y;
 }
 void serialize(const railnet_file_info &file, std::ostream &o)
 {
@@ -176,29 +224,40 @@ void deserialize(railnet_file_info &file, std::istream &i)
 {
 	std::string found_hdr;
 	deserialize(found_hdr, i);
-	assert(found_hdr==file.hdr);
+	assert(found_hdr=="openttd/railnet");
 	uint version;
 	deserialize(version, i);
-	assert(version==file.version);
+	assert(version==0);
 	deserialize(file.order_lists, i);
 	deserialize(file.stations, i);
 	deserialize(file.cargo_names, i);
 }
 bool json_ifile::once(railnet_file_info& fi)
 {
-	smem<std::string, s_filetype> filetype;
-	smem<uint, s_version> version;
-	// TODO: check version + filetype	
-	bool ret = _try(filetype)
-		|| _try(version)
+	// TODO: check version + filetype
+	smem<std::string, s_mimetype> tmp_hdr;
+	smem<int, s_version> tmp_version = -1;
+
+	bool ret = _try(tmp_hdr)
+		|| _try(tmp_version)
 		|| _try(fi.order_lists)
 		|| _try(fi.stations)
 		|| _try(fi.cargo_names);
+	recent.clear();
 	if(ret)
-	 return true;
+	{
+		// FEATURE: put this into operator<< ? i.e.:
+		//	tmp = read..., if... throw? instead of
+		//	*this = read
+		if(tmp_version() != -1 && tmp_version != fi.version)
+			throw "version mismatch";
+		else if(tmp_hdr().length() && tmp_hdr() != fi.hdr())
+			throw "header signature does not match";
+		else return true;
+	}
 	else
 	{
-		if(recent == "[")
+		if(recent == "}")
 		 recent.clear();
 		else
 		 throw "error";
@@ -210,8 +269,9 @@ bool json_ifile::once(railnet_file_info& fi)
 
 json_ofile& json_ofile::operator<<(const railnet_file_info& fi)
 {
-	return *this << railnet_file_info::hdr
-		<< railnet_file_info::version
+	struct_guard _(*this);
+	return *this << fi.hdr
+		<< fi.version
 		<< fi.order_lists
 		<< fi.stations
 		<< fi.cargo_names;
@@ -233,9 +293,19 @@ void deserialize(cargo_info& ci, std::istream& i)
 	deserialize(ci.slice, i);
 }
 
-json_ofile&json_ofile::operator<<(const cargo_info& ci)
+json_ofile& json_ofile::operator<<(const cargo_info& ci)
 {
+	struct_guard _(*this);
 	return *this <</* ci.label <<*/ ci.fwd << ci.rev << ci.slice;
+}
+
+json_ofile&json_ofile::operator<<(const std::pair<const char, CargoLabel>& pr)
+{
+	// TODO: avoid things like "short", they may not fit the 16bit scheme
+	std::pair<unsigned short, char[5]> p2;
+	p2.first = pr.first;
+	strcpy(p2.second, "test"); // TODO!
+	return *this << p2;
 }
 
 }

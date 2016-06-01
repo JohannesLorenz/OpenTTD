@@ -22,6 +22,8 @@
 #include <limits>
 #include <cstring> // TODO: cpp?
 #include <list>
+#include <string>
+#include <cmath>
 
 #ifdef EXPORTER
 #include <cstdint>
@@ -35,6 +37,8 @@ typedef uint32 CargoLabel;
 #include "../station_base.h"
 #include "../transport_type.h"
 #endif
+
+#include "json_static.h"
 
 namespace comm
 {
@@ -66,25 +70,12 @@ enum s_id
 	s_fwd, // TODO: req?
 	s_rev, // TODO: req?
 	s_slice,
+	s_railnet,
+	s_mimetype,
 	s_size
 };
 
 const char* string_no(std::size_t id);
-
-template<class T, std::size_t Str>
-class smem
-{
-	T val;
-public:
-	T& get() { return val; }
-	const T& get() const { return val; }
-	operator T& () { return get(); }
-	operator const T& () const { return get(); }
-	T& operator()() { return get(); }
-	const T& operator()() const { return get(); }
-	smem() {}
-	smem(const T& val) : val(val) {}
-};
 
 struct cargo_info
 {
@@ -113,14 +104,7 @@ struct order_list
 		real_stations(0)*/
 	{
 	}
-#if 0
-	const char* name_of(const UnitID* ) const { return "unit_number"; }
-	const char* name_of(const bool* b) const { return (b == &is_cycle) ? "is_cycle" : "is_bicycle" }
-	const char* name_of(const StationID* ) const { return "min_station" };
-	const char* name_of(const std::set<CargoLabel>* ) const { return "cargo"; }
-	const char* name_of(const std::vector<std::pair<StationID, bool> >* ) const { return "stations"; }
-	const char* name_of(const std::size_t* ) const { return "real_stations"; }
-#endif
+
 }; // TODO: subclass order_list_sortable? avoid serializing min_station
 
 struct station_info
@@ -129,9 +113,7 @@ struct station_info
 	smem<float, s_x> x;
 	smem<float, s_y> y;
 
-/*	const char* name_of(const std::string*) { return "name"; }
-	const char* name_of(const float* f) { return (f == &x) ? "x" : "y"; }
-*/	template<class T>
+	template<class T>
 	T& rd(const char* name, T& rd) {
 		switch(*name) {
 			case 'x': return rd >> x;
@@ -154,13 +136,15 @@ struct railnet_file_info
 
 struct railnet_file_info
 {
-	static const std::string hdr;
-	static const uint version;
+	smem<std::string, s_mimetype> hdr;
+	smem<int, s_version> version;
 	smem<std::list<order_list>, s_order_lists> order_lists;
 	smem<std::map<StationID, station_info>, s_stations> stations;
+	/*FEATURE: char suffices, but need short to print it*/
 	smem<std::map<char, CargoLabel>, s_cargo_names> cargo_names;
-};
 
+	railnet_file_info() : hdr("openttd/railnet"), version(0) {}
+};
 
 /*
 	IO primitives:
@@ -220,27 +204,6 @@ void serialize(const Container& c, std::ostream& o,
 		serialize(*itr, o);
 }
 
-namespace dtl {
-
-//! generic push back function for all types of containers
-template<class Cont> void push_back(Cont& c,
-	const typename Cont::value_type& val) {
-	c.insert(c.end(), val);
-}
-
-template<class Container>
-struct noconst_value_type_of {
-	typedef typename Container::value_type type;
-};
-
-template<class T1, class T2>
-struct noconst_value_type_of<std::map<T1, T2> > {
-	// this fixes that map's value type is not std::pair<const T1, T2>
-	typedef typename std::pair<T1, T2> type;
-};
-
-}
-
 //! sfinae based container deserializer
 template<class Container>
 void deserialize(Container& c, std::istream& is,
@@ -250,9 +213,9 @@ void deserialize(Container& c, std::istream& is,
 	deserialize(sz, is);
 	for(uint32 i = 0; i<sz; ++i)
 	{
-		typename dtl::noconst_value_type_of<Container>::type val;
+		typename detail::noconst_value_type_of<Container>::type val;
 		deserialize(val, is);
-		dtl::push_back(c, val);
+		detail::push_back(c, val);
 	}
 }
 
@@ -280,36 +243,95 @@ void deserialize(order_list& ol, std::istream& i);
 void deserialize(station_info& si, std::istream &i);
 void deserialize(railnet_file_info& file, std::istream &i);
 
-struct json_ofile
+class json_ofile
 {
-	std::ostream* os;
-
-json_ofile(std::ostream& os) : os(&os) {}
-
-json_ofile& operator<<(const bool& b) { *os << (b ? "true" : "false"); return *this; }
-json_ofile& operator<<(const byte& b) { *os << +b; return *this; }
-json_ofile& operator<<(const uint16& i) { *os << i; return *this; } 
-json_ofile& operator<<(const uint32& i) { *os << i; return *this; }
-json_ofile& operator<<(const int& i) { *os << i; return *this; }
-json_ofile& operator<<(const std::size_t& i) { *os << i; return *this; }
-json_ofile& operator<<(const char& c) { *os << '"' << c << '"'; return *this; }
-json_ofile& operator<<(const float& f) { *os << f; return *this; }
-json_ofile& operator<<(const char* s) { *os << '"' << s << '"'; return *this; }
-json_ofile& operator<<(const std::string& s) { *os << '"' << s << '"'; return *this; }
-
-template<class Cont>
-json_ofile& operator<<(const Cont& v)
-{
-	*os << "[ ";
-	typename Cont::const_iterator it = v.begin();
-	*this << *(it++);
-	for(; it != v.end(); ++it)
+	template<class T>
+	struct _raw
 	{
-		*this << ", " << *it;
+		const T* ptr;
+		_raw(const T& ref) : ptr(&ref) {}
+	};
+
+	json_ofile(json_ofile& other) = delete;
+
+protected:
+	class _struct_depth
+	{
+		char depth;
+		bool _first;
+	public:
+		_struct_depth& operator++() { return ++depth, _first = true, *this; }
+		_struct_depth& operator--() { return --depth, _first = false, *this; }
+		_struct_depth() : depth(0), _first(true) {
+
+		}
+
+		operator char() const { return depth; }
+
+		bool first() {
+			bool res = _first; _first = false; return res;
+		}
+	} struct_depth;
+
+	class struct_guard
+	{
+		json_ofile* j;
+	public:
+		struct_guard(json_ofile& _j) : j(&_j) {
+			++j->struct_depth;
+			(*j) << raw("{\n") << ident();
+		}
+		~struct_guard() { --j->struct_depth; (*j) << raw('\n') << ident() << raw("}"); }
+	};
+
+	std::ostream* const os;
+public:
+	json_ofile(std::ostream& os) : os(&os) {}
+
+	json_ofile& operator<<(const bool& b) { *os << (b ? "true" : "false"); return *this; }
+	json_ofile& operator<<(const byte& b) { *os << +b; return *this; }
+	json_ofile& operator<<(const uint16& i) { *os << i; return *this; }
+	json_ofile& operator<<(const uint32& i) { *os << i; return *this; }
+	json_ofile& operator<<(const int& i) { *os << i; return *this; }
+	json_ofile& operator<<(const std::size_t& i) { *os << i; return *this; }
+	json_ofile& operator<<(const char& c) { *os << '"' << c << '"'; return *this; }
+	json_ofile& operator<<(const float& f) { *os << f; return *this; }
+	json_ofile& operator<<(const char* s) { *os << '"' << s << '"'; return *this; }
+	json_ofile& operator<<(const std::string& s) { *os << '"' << s << '"'; return *this; }
+
+	struct ident {};
+	json_ofile& operator<<(const ident&)
+	{
+		for(char i = 0; i < struct_depth; ++i) *this << raw("  ");
+		return *this;
 	}
-	*os << ']';
-	return *this;
-}
+
+	template<class Cont>
+	json_ofile& operator<<(const Cont& v)
+	{
+		if(v.empty())
+		 return *this << raw("[]");
+
+		*this << /*raw('\n') << ident() <<*/ raw("[\n");
+		++struct_depth;
+		typename Cont::const_iterator it = v.begin();
+		*this << ident() << *(it++);
+		for(; it != v.end(); ++it)
+		{
+			*this << raw(",\n") << ident() << *it;
+		}
+		--struct_depth;
+		*this << raw('\n') << ident() << raw(']');
+		return *this;
+	}
+
+	template<class T> static _raw<T> raw(const T& ref) { return _raw<T>(ref); }
+
+	template<class T>
+	json_ofile& operator<<(const _raw<T>& r)
+	{
+		return ((*os) << *r.ptr), *this;
+	}
 
 	// pairs are typically in containers
 	// in order to not write the same struct member names 100 times,
@@ -317,134 +339,126 @@ json_ofile& operator<<(const Cont& v)
 	template<class T1, class T2>
 	json_ofile& operator<<(const std::pair<T1, T2>& p)
 	{
-		return *this << "[ " << p.first << ", " << p.second << " ]";
+		*this << /*raw('\n') << ident() <<*/ raw("[\n");
+		++struct_depth;
+			*this << ident() << p.first << raw(",\n") <<
+			ident() << p.second << raw("\n");
+		--struct_depth;
+		return *this << ident() << raw(']');
 	}
 
-// TODO: -> cpp
 	json_ofile& operator<<(const order_list& ol);
 	json_ofile& operator<<(const station_info& si);
 	json_ofile& operator<<(const cargo_info& ci);
 	json_ofile& operator<<(const railnet_file_info& file);
 
-	template<class S, class M>
-	struct _member
-	{
-		S* sptr;
-		M* mptr;
-	public:
-		_member(S& sref, M& mref) : sptr(&sref), mptr(&mref) {}
-	};
-	
-	template<class S, class M>
-	_member<S, M> member(S& s, M& m) { return _member<S, M>(s, m); }
-	
-	
-	template<class S, class M>
-	json_ofile& operator<<(const _member<S, M>& m)
-	{
-		return *this << m.sptr->name_of(&m.mptr);
-	}
+	json_ofile& operator<<(const std::pair<const char, CargoLabel>& pr);
 
 	template<class T, std::size_t StringId>
 	json_ofile& operator<<(const smem<T, StringId>& _smem)
 	{
-		return *this << '"' << string_no(StringId) << "\": " << (const T&)_smem << '\n';
-	}
-
-};
-
-struct json_ifile
-{
-	template<char c>
-	struct must_read
-	{
-	};
-
-	template<char c>
-	json_ifile& operator>>(const must_read<c>) {
-		char tmp;
-		*is >> tmp;
-		if(tmp != c) throw "parse error: inexpected char";
+		if(!struct_depth.first())
+		  *this << raw(",\n") << ident();
+		*this << string_no(StringId) << raw(": ") << (const T&)_smem;
+		//*os << '\n';
 		return *this;
 	}
-	std::istream* is;
-	std::size_t depth;
+};
 
-	json_ifile(std::istream& is) : is(&is) {}
-
-	json_ifile& operator>>(bool& b) { char tmp[6]; *is >> tmp; b = !strncmp(tmp, "true", 4); return *this; } /* TODO: vulnerability! */
-	json_ifile& operator>>(byte& b) { *is >> b; return *this; }
-	json_ifile& operator>>(uint16& i) { *is >> i; return *this; }
-	json_ifile& operator>>(uint32& i) { *is >> i; return *this; }
-	json_ifile& operator>>(int& i) { *is >> i; return *this; }
-	json_ifile& operator>>(std::size_t& i) { *is >> i; return *this; }
-	static void assert_q(char c) { if(c!='"') throw "parse error, expected '\"'"; }
-	json_ifile& operator>>(char& c) { char tmp; *is >> tmp; assert_q(tmp); *is >> c; *is >> tmp; assert_q(tmp); return *this; }
-	json_ifile& operator>>(float& f) { *this >> f; return *this; }
-	json_ifile& operator>>(std::string& s) { char tmp; *is >> tmp; assert_q(tmp); *is >> s; *is >> tmp; assert_q(tmp); return *this; }
+class json_ifile
+{
+	template<char c> class must_read {};
+	bool hit_end;
 
 	template<class T>
-	struct read_raw
+	bool rdnum(T& number)
+	{
+		char tmp;
+		*this >> read_raw(tmp);
+		bool neg = false;
+		char comma_pos = -1;
+		if(chk_end(tmp))
+		 return false;
+		number = 0;
+		switch(tmp)
+		{
+			case ']':
+			case '}':
+				return false;
+			case '-':
+				neg = true;
+				break;
+			case '.':
+				comma_pos = 0;
+				break;
+			default:
+				if(isdigit(tmp))
+				 (number *= 10 ) += (tmp - '0');
+				else throw "not a number";
+		}
+		int i;
+		int max = 16;
+		signed int exponent = 0;
+		for(i=1; i<max;++i)
+		{
+			//*this >> read_raw(tmp);
+			tmp = std::char_traits<char>::to_char_type(is->peek());
+			switch(tmp)
+			{
+				case '.':
+					if(comma_pos == -1)
+					 comma_pos = i;
+					else
+					 throw "two points not allowed";
+					break;
+				case 'e':
+				case 'E':
+					if(! rdnum(exponent) )
+					 throw "expected exponent after 'e' or 'E'.";
+				case ',':
+				case '\n':
+					max = i;
+					break;
+				default:
+					if(isdigit(tmp))
+					 (number *= 10 ) += (tmp-'0');
+					else throw "not a number";
+			}
+			if(tmp != ',')
+			 is->ignore(1);
+		}
+
+		int mov = 0;
+		if(exponent)
+		{
+			if(detail::is_same<T, float>::value || exponent > 0)
+			 mov += exponent;
+			else throw "exponent found, but non-floating number expected (or exponent negative)";
+		}
+		if(comma_pos != -1)
+		{
+			if(detail::is_same<T, float>::value)
+			 mov += comma_pos-i+2;
+			else throw "point found, but non-floating number expected";
+		}
+		if(mov != 0)
+		 number *= powf(10, mov);
+		if(neg)
+		 number *= -1;
+		return true;
+	}
+
+	template<class T>
+	struct _read_raw
 	{
 		T* ptr;
-		read_raw(T& ref) : ptr(&ref) {}
+		_read_raw(T& ref) : ptr(&ref) {}
 	};
 
 	bool once(order_list& ol);
 	bool once(station_info& si);
 	bool once(cargo_info& ci);
-
-	template<class T, std::size_t S>
-	bool _try(smem<T, S>& s)
-	{
-		if(recent.empty())
-		 *this >> recent;
-		if(recent == string_no(S))
-		{
-			*this >> must_read<':'>() >> s.get();
-			return true;
-		}
-		else return false;
-	}
-
-	template<class T>
-	json_ifile& operator>>(read_raw<T>& r)
-	{
-		return is >> *r.ptr;
-	}
-
-	template<class Cont>
-	json_ifile& operator>>(Cont& v)
-	{
-		*this >> must_read<'['>();
-		while(true)
-		{
-			char sep;
-			*is >> sep;
-			if(sep == ',') {
-				typename dtl::noconst_value_type_of<Cont>::type tmp;
-				*this >> tmp;
-				dtl::push_back(v, tmp);
-			}
-			else if(sep == ']') break;
-			else throw "expected serparator: , or ]";
-		}
-		return *this;
-	}
-
-
-	template<class T1, class T2>
-	json_ifile& operator>>(std::pair<T1, T2>& p)
-	{
-		return *this >> must_read<'['>() >> p.first >> must_read<','>()
-			>> p.second >> must_read<']'>();
-	}
-
-
-	json_ifile& operator>>(order_list& ol) { return *this >> struct_dict(ol); }
-	json_ifile& operator>>(station_info& si) { return *this >> struct_dict(si); }
-	json_ifile& operator>>(cargo_info& ci) { return *this >> struct_dict(ci); }
-	json_ifile& operator>>(railnet_file_info& file) { return *this >> struct_dict(file); }
+	bool once(railnet_file_info& fi);
 
 	template<class S>
 	class _struct_dict
@@ -455,20 +469,145 @@ struct json_ifile
 		_struct_dict(S& ref) : _ptr(&ref) {}
 	};
 
+protected:
+	std::istream* const is;
+
+	bool chk_end(char c) {
+		return (c == ']' || c == '}') ? (hit_end = true) : false;
+	}
+	bool end_hit() { bool r = hit_end; hit_end = false; return r; }
+
+	template<class T, std::size_t S>
+	bool _try(smem<T, S>& s)
+	{
+		if(recent.empty())
+		 *this >> recent;
+		if(recent == string_no(S))
+		{
+	//		std::cerr << "key: " << recent << std::endl;
+			recent.clear();
+			*this >> must_read<':'>() >> s.get();
+			return true;
+		}
+		else return false;
+	}
+
 	std::string recent;
 
-	template<class S> // TODO: static?
-	_struct_dict<S> struct_dict(S& s) { return _struct_dict<S>(s); }
+	template<class S>
+	static _struct_dict<S> struct_dict(S& s) {
+		return _struct_dict<S>(s);
+	}
 
 	template<class S>
 	json_ifile& operator>>(_struct_dict<S> d) {
-		*this >> must_read<'['>();
-		while( once(*d.the_struct()) ) ;
+		char tmp;
+		*this >> read_raw(tmp);
+		if(!chk_end(tmp))
+		{
+			if(tmp != '{')
+			 throw "expected '{' at beginning of struct.";
+			do {
+				once(*d.the_struct());
+				*this >> read_raw(tmp);
+				if(tmp != ',' && tmp != '}')
+				 throw "expecting ',' or '}' inside struct";
+			} while(tmp == ',');
+		}
 		return *this;
 	}
 
-private:
-	bool once(railnet_file_info& fi);
+public:
+	json_ifile(std::istream& is) : hit_end(false), is(&is) {}
+
+	template<char c>
+	json_ifile& operator>>(const must_read<c>)
+	{
+		char tmp;
+		*is >> tmp;
+		if(tmp != c) throw "parse error: inexpected char";
+		return *this;
+	}
+
+	json_ifile& operator>>(bool& b);
+	json_ifile& operator>>(byte& b) { rdnum(b); return *this; }
+	json_ifile& operator>>(uint16& i) { rdnum(i); return *this; }
+	json_ifile& operator>>(uint32& i) { rdnum(i); return *this; }
+	json_ifile& operator>>(int& i) { rdnum(i); return *this; }
+	json_ifile& operator>>(std::size_t& i) { rdnum(i); return *this; }
+	static void assert_q(char c) { if(c!='"') throw "parse error, expected '\"'"; }
+	json_ifile& operator>>(char& c) { char tmp; *is >> tmp;
+		if(!chk_end(tmp)) { assert_q(tmp); *is >> c; *is >> tmp; assert_q(tmp); }
+		return *this; }
+	json_ifile& operator>>(float& f) { rdnum(f); return *this; }
+	json_ifile& operator>>(std::string& s);
+
+	template<class T> _read_raw<T> read_raw(T& ref) {
+		return _read_raw<T>(ref);
+	}
+
+	template<class T>
+	json_ifile& operator>>(_read_raw<T> r)
+	{
+		(*is) >> *r.ptr;
+		return *this;
+	}
+
+	template<class Cont>
+	json_ifile& operator>>(Cont& v)
+	{
+		char tmp;
+		*this >> read_raw(tmp);
+		if(!chk_end(tmp))
+		{
+			if(tmp != '[')
+			 throw "expected [ at beginning of container";
+
+			typedef typename detail::noconst_value_type_of<Cont>::type value_type;
+			{
+				value_type tmp;
+				*this >> tmp;
+				detail::push_back(v, tmp);
+			}
+			if(!end_hit())
+			{
+				while(true)
+				{
+					char sep;
+					*this >> read_raw(sep);
+					if(sep == ',') {
+						value_type tmp;
+						*this >> tmp;
+						detail::push_back(v, tmp);
+					}
+					else if(sep == ']') break;
+					else throw "expected separator: , or ]";
+				}
+			}
+		}
+		return *this;
+	}
+
+	template<class T1, class T2>
+	json_ifile& operator>>(std::pair<T1, T2>& p)
+	{
+		char tmp;
+		*this >> read_raw(tmp);
+		if(!chk_end(tmp))
+		{
+			if(tmp != '[')
+			 throw "expected [ at beginning of pair";
+			*this >> p.first >> must_read<','>()
+				>> p.second >> must_read<']'>();
+		}
+		return *this;
+	}
+	json_ifile& operator>>(std::pair<char, CargoLabel>& pr);
+
+	json_ifile& operator>>(order_list& ol) { return *this >> struct_dict(ol); }
+	json_ifile& operator>>(station_info& si) { return *this >> struct_dict(si); }
+	json_ifile& operator>>(cargo_info& ci) { return *this >> struct_dict(ci); }
+	json_ifile& operator>>(railnet_file_info& file) { return *this >> struct_dict(file); }
 };
 
 } // namespace comm
