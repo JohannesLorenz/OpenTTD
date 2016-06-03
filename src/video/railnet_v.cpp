@@ -270,9 +270,18 @@ public:
 		comm::order_list* new_ol) : nst(nst), vp(vp), new_ol(new_ol) {}
 };
 
+struct tmp_order_list
+{
+	bool is_cycle;
+	int next_cargo_slice;
+	std::vector<std::pair<StationID, bool> > stations;
+	std::map<CargoLabel, comm::cargo_info> slices;
+};
+
 void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Train* train,
 	std::vector<bool>& stations_used, std::set<CargoLabel>& cargo_used,
-	std::set<const OrderList*>& order_lists_done, node_list_t& node_list) const
+	std::set<const OrderList*>& order_lists_done, node_list_t& node_list,
+	tmp_order_list& tmp_order_lists) const
 {
 	comm::order_list new_ol;
 
@@ -454,7 +463,7 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 
 		comm::order_list* match = NULL;
 
-		new_ol.unit_number = train->unitnumber;
+		//new_ol.unit_number = train->unitnumber;
 
 		// add all cargo from this train
 		for (Vehicle *v = train->orders.list->GetFirstSharedVehicle(); v != NULL; v = v->Next()) {
@@ -505,8 +514,9 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 			// unfortunately, we need to look it up by scanning the whole order list...
 			for(std::list<comm::order_list>::iterator it = file.order_lists().begin();
 				it != file.order_lists().end() && !match; ++it)
+			for(auto it2 = it->cargo().begin(); it2 != it->cargo.end(); ++it2)
 			{
-				if(the_match == it->unit_number)
+				if(the_match == it2->unit_number)
 				 match = &*it;
 			}
 			if(!match)
@@ -542,23 +552,28 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 
 			// step (1) + (2)
 			int reserved_for_new = match->next_cargo_slice++;
-			for(std::map<CargoLabel, comm::cargo_info>::const_iterator new_i = new_ol.cargo().begin();
+			for(std::map<cargo_label_t, comm::cargo_info>::const_iterator new_i = new_ol.cargo().begin();
 				new_i != new_ol.cargo().end(); ++new_i)
 			{
 //				std::set<comm::cargo_info>::const_iterator in_match = match->cargo().find(new_i->first);
-				std::map<CargoLabel, comm::cargo_info>::iterator in_match
+				std::map<cargo_label_t, comm::cargo_info>::iterator in_match
 					= match->cargo().find(new_i->first);
 				if(in_match == match->cargo().end())
 				{ // step (1)
 					match->cargo().insert(std::make_pair(
 						new_i->first,
-						comm::cargo_info {true, false, reserved_for_new }
+						comm::cargo_info {is_same, !is_same, reserved_for_new }
 						));
 				}
 				else
 				{ // step (2)
 			//		in_match->second.slice = -in_match->second.slice;
-					in_match->second.slice += match->next_cargo_slice;
+					match->next_cargo_slice = std::max
+					(match->next_cargo_slice,
+						1 +
+					 (in_match->second.slice += reserved_for_new));
+					if(is_rev)
+					 in_match->second.rev = true;
 				}
 			}
 	/*		// step (3)
@@ -602,7 +617,7 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 
 			already_added.is_cycle = false;
 			already_added.is_bicycle = true;
-			already_added.rev_unit_no = cur_ol.unit_number;
+			//already_added.rev_unit_no = cur_ol.unit_number;
 			// for bicycle, no need to add another
 		} // for all already added order lists
 #endif
@@ -623,7 +638,7 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 			}
 		}
 
-		for (std::map<CargoLabel, comm::cargo_info>::const_iterator citr = new_ol.cargo().begin();
+		for (std::map<cargo_label_t, comm::cargo_info>::const_iterator citr = new_ol.cargo().begin();
 			citr != new_ol.cargo().end(); ++citr) {
 			cargo_used.insert(citr->first);
 		}
@@ -737,6 +752,8 @@ void VideoDriver_Railnet::MainLoop()
 	std::cerr << "Serializing " << file.order_lists.get().size() << " order lists..." << std::endl;
 	//serialize(file, std::cout);
 	//comm::json_ofile(std::cout) << comm::smem<comm::railnet_file_info, comm::s_railnet>(file);
+
+	comm::prechecks(file);
 	comm::json_ofile(std::cout) << file;
 }
 

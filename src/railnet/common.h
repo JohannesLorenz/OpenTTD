@@ -24,6 +24,7 @@
 #include <list>
 #include <string>
 #include <cmath>
+#include <algorithm>
 
 #ifdef EXPORTER
 #include <cstdint>
@@ -39,6 +40,41 @@ typedef uint32 CargoLabel;
 #endif
 
 #include "json_static.h"
+
+//! Converter to convert between CargoLabels and C strings
+union lbl_conv_t
+{
+private:
+	int lbl[2];
+	char str[8];
+public:
+	lbl_conv_t() : lbl{0,0} {}
+	const char* convert(int value)
+	{
+		lbl[0] = value;
+		std::reverse(str, str + 4);
+		return str;
+	}
+	void convert(int value, char* res)
+	{
+		std::copy_n(convert(value), 5, res);
+	}
+	int convert(const char* value)
+	{
+		std::copy(value, value+4, str);
+		std::reverse(str, str+4);
+		return *lbl;
+	}
+};
+
+struct cargo_label_t
+{
+	CargoLabel lbl;
+	operator const CargoLabel&() const { return lbl; }
+	operator CargoLabel&() { return lbl; }
+	cargo_label_t() = default;
+	cargo_label_t(CargoLabel lbl) : lbl(lbl) {}
+};
 
 namespace comm
 {
@@ -83,6 +119,7 @@ struct cargo_info
 	smem<bool, s_fwd> fwd;
 	smem<bool, s_rev> rev;
 	smem<int, s_slice> slice;
+	smem<UnitID, s_unit_number> unit_number;
 /*	bool operator<(const cargo_info& rhs) const {
 		return (slice == rhs.slice) ? label < rhs.label
 	    : slice < rhs.slice }*/
@@ -90,12 +127,12 @@ struct cargo_info
 
 struct order_list
 {
-	smem<UnitID, s_unit_number> unit_number;
-	smem<UnitID, s_rev_unit_no> rev_unit_no;
+//	smem<UnitID, s_unit_number> unit_number;
+//	smem<UnitID, s_rev_unit_no> rev_unit_no;
 	smem<bool, s_is_cycle> is_cycle;
 	smem<bool, s_is_bicycle> is_bicycle; //! at least two trains that drive in opposite cycles
 //	smem<StationID, s_min_station> min_station;
-	smem<std::map<CargoLabel, cargo_info>, s_cargo> cargo; // cargo order and amount does not matter
+	smem<std::map<cargo_label_t, cargo_info>, s_cargo> cargo; // cargo order and amount does not matter
 	int next_cargo_slice;
 	smem<std::vector<std::pair<StationID, bool> >, s_stations> stations;
 //	smem<std::size_t, s_real_stations> real_stations;
@@ -141,7 +178,7 @@ struct railnet_file_info
 	smem<std::list<order_list>, s_order_lists> order_lists;
 	smem<std::map<StationID, station_info>, s_stations> stations;
 	/*FEATURE: char suffices, but need short to print it*/
-	smem<std::map<char, CargoLabel>, s_cargo_names> cargo_names;
+	smem<std::map<unsigned char, cargo_label_t>, s_cargo_names> cargo_names;
 
 	railnet_file_info() : hdr("openttd/railnet"), version(0) {}
 };
@@ -306,19 +343,66 @@ public:
 		return *this;
 	}
 
+	/*start*/
+	const static int linewidth = 79;
+	const static int max_keylength = 24;
+	template<class T>
+	static int mwidth(const T& num) {
+		return ::logf(num) + 1 + (num < 0); // FEATURE: use non float algorithm
+	}
+
+	static int est(const bool& b) { return b ? 4 : 5; }
+	static int est(const byte& b) { return mwidth(b); } // FEATURE: log10
+	static int est(const uint16& i) { return mwidth(i); }
+	static int est(const uint32& i) { return mwidth(i); }
+	static int est(const int& i) { return mwidth(i); }
+	static int est(const std::size_t& i) { return mwidth(i); }
+	static int est(const char& ) { return 3; }
+	static int est(const float& ) { return 20; }
+	static int est(const char* s) { return 2 + strlen(s); }
+	static int est(const std::string& s) { return 2 + s.length(); }
+	template<class T1, class T2>
+	static int est(const std::pair<T1, T2>& p) { return 4 + est(p.first) + est(p.second); }
+	template<class T>
+	static int est(const T& ) { return linewidth << 1; }
+	int remain;
+	int used;
+	/*end*/
+
 	template<class Cont>
 	json_ofile& operator<<(const Cont& v)
 	{
 		if(v.empty())
 		 return *this << raw("[]");
 
-		*this << /*raw('\n') << ident() <<*/ raw("[\n");
+		int init_remain = linewidth -
+			(struct_depth << 1) // ident
+			- 1; // comma at the end
+		remain =
+			init_remain -
+			max_keylength - // assumed key lenght
+			4; // apostrophes for key, ': ' + comma at the end
+		int remain2 = remain - est(v.begin());
+
+		bool nextline = true; //remain2 < 0;
+		const char* nsep = nextline ? "[\n" : "[";
+		*this << /*raw('\n') << ident() <<*/ raw(nsep);
+		remain = nextline ? init_remain : remain2;
 		++struct_depth;
+
+
 		typename Cont::const_iterator it = v.begin();
-		*this << ident() << *(it++);
+		if(nextline) *this << ident();
+		else *this << raw(' ');
+		*this << *(it++);
 		for(; it != v.end(); ++it)
 		{
-			*this << raw(",\n") << ident() << *it;
+			remain2 = remain - est(*it);
+			nextline = true; /*remain2 < 0;*/
+			if(nextline) *this << raw(",\n") << ident();
+			else *this << raw(", ");
+			*this << *it;
+			remain = nextline ? init_remain : remain2;
 		}
 		--struct_depth;
 		*this << raw('\n') << ident() << raw(']');
@@ -352,7 +436,9 @@ public:
 	json_ofile& operator<<(const cargo_info& ci);
 	json_ofile& operator<<(const railnet_file_info& file);
 
-	json_ofile& operator<<(const std::pair<const char, CargoLabel>& pr);
+	json_ofile& operator<<(const cargo_label_t& c);
+/*	json_ofile& operator<<(const std::pair<const char, CargoLabel>& pr);
+	json_ofile& operator<<(const std::pair<CargoLabel, cargo_info>& pr);*/
 
 	template<class T, std::size_t StringId>
 	json_ofile& operator<<(const smem<T, StringId>& _smem)
@@ -541,6 +627,7 @@ public:
 		return *this; }
 	json_ifile& operator>>(float& f) { rdnum(f); return *this; }
 	json_ifile& operator>>(std::string& s);
+	json_ifile& operator>>(char* s);
 
 	template<class T> _read_raw<T> read_raw(T& ref) {
 		return _read_raw<T>(ref);
@@ -567,7 +654,8 @@ public:
 			{
 				value_type tmp;
 				*this >> tmp;
-				detail::push_back(v, tmp);
+				detail::push_back(v, std::move(tmp));
+				std::cerr << "pushed back, size: " << v.size() << std::endl;
 			}
 			if(!end_hit())
 			{
@@ -602,13 +690,17 @@ public:
 		}
 		return *this;
 	}
-	json_ifile& operator>>(std::pair<char, CargoLabel>& pr);
+//	json_ifile& operator>>(std::pair<char, CargoLabel>& pr);
+	json_ifile& operator>>(cargo_label_t& c);
+
 
 	json_ifile& operator>>(order_list& ol) { return *this >> struct_dict(ol); }
 	json_ifile& operator>>(station_info& si) { return *this >> struct_dict(si); }
 	json_ifile& operator>>(cargo_info& ci) { return *this >> struct_dict(ci); }
 	json_ifile& operator>>(railnet_file_info& file) { return *this >> struct_dict(file); }
 };
+
+void prechecks(const railnet_file_info& file);
 
 } // namespace comm
 

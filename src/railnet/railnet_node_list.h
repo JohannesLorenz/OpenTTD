@@ -11,65 +11,74 @@ struct node_list_t
 
 	//! @node: C++11 guarantees that equivalent keys remain
 	//! in the insertion order. we insert them sorted by key...
-	//! TODO: this is a big problem with non C++11 code! guarantees?
-	//! TODO: when will openttd switch to C++11? Or, force C++11 only for graph driver?
 	std::map<StationID, node_info_t> nodes;
 	std::map<UnitID, times_t> lengths;
 	std::map<UnitID, std::set<CargoLabel>> cargo;
 
 private:
 	void visit(UnitID u, StationID s, times_t nth) {
+		if(s)
+		{
+			std::cerr << "s" << std::endl;
+		}
+		if(u)
+			std::cerr << "u" << std::endl;
+		if(nth)
+			std::cerr << "nth" << std::endl;
+		if(nodes.size())
+			std::cerr << "sz" << std::endl;
 		nodes[s].emplace(u, nth);
 	}
 public:
 	void init_nodes(const comm::order_list& ol)
 	{
-		std::size_t nth = 0;
-		UnitID unit_no = ol.unit_number;
-		for(const auto& pr : ol.stations.get())
-		 if(pr.second) /* if train stops */
-		  visit(unit_no, pr.first, nth++);
-		bool has_rev = false;
-		for(const std::pair<const CargoLabel, comm::cargo_info>& c :
-			ol.cargo())
-		 if(c.second.rev)
-		  has_rev = true;
-
-		if(has_rev) // TODO: common func, avoid code dupl?
+		for(const comm::cargo_info& ci : ol)
 		{
-			nth = 0;
-			unit_no = ol.rev_unit_no;
-			for(std::vector<std::pair<StationID, bool>>::const_reverse_iterator
-				r = ol.stations.get().rbegin();
-				r != ol.stations.get().rend(); ++r)
-			 if(r->second) // if train stops
-			  visit(unit_no, r->first, nth++);
+			std::size_t nth = 0;
+			UnitID;
+
+			if(ci.fwd)
+			{
+				unit_no = ci.unit_number;
+				for(const auto& pr : ol.stations.get())
+				 if(pr.second) /* if train stops */
+				  visit(unit_no, pr.first, nth++);
+			}
+
+			if(ci.rev)
+			{
+				nth = 0;
+				unit_no = ci.rev_unit_no;
+				for(std::vector<std::pair<StationID, bool>>::const_reverse_iterator
+					r = ol.stations.get().rbegin();
+					r != ol.stations.get().rend(); ++r)
+				 if(r->second) // if train stops
+				  visit(unit_no, r->first, nth++);
+			}
 		}
 	}
 
-	// to call this, the stations and cargo
+	// to call this, the stations and cargo must be known already
 	void init_rest(const comm::order_list& ol)
 	{
-		UnitID unit_no = ol.unit_number;
-		lengths[unit_no] = ol.stations().size();
-		bool has_rev = false;
-		for(const std::pair<const CargoLabel, comm::cargo_info>& c :
-			ol.cargo())
-		{
-			if(c.second.fwd)
-			 cargo[unit_no].insert(c.first);
-			if(c.second.rev)
-			 has_rev = true;
-		}
+		// assumption: same slice => same unit number/same reverse unit number
 
-		if(has_rev) // TODO: common func, avoid code dupl?
+		for(const comm::cargo_info& ci : ol)
 		{
-			unit_no = ol.rev_unit_no;
+			UnitID unit_no = ci.unit_number;
 			lengths[unit_no] = ol.stations().size();
-			for(const std::pair<CargoLabel, comm::cargo_info>& c :
+
+			if(ci.fwd)
+			for(const std::pair<const CargoLabel, comm::cargo_info>& c :
 				ol.cargo())
+			 cargo[unit_no].insert(c.first);
+
+			if(ci.rev) // TODO: common func, avoid code dupl?
 			{
-				if(c.second.rev)
+				unit_no = ci.rev_unit_no;
+				lengths[unit_no] = ol.stations().size();
+				for(const std::pair<CargoLabel, comm::cargo_info>& c :
+					ol.cargo())
 				 cargo[unit_no].insert(c.first);
 			}
 		}
