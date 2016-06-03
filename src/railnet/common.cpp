@@ -64,7 +64,7 @@ const char* string_no(std::size_t id) { return strings[id]; }
 
 void serialize(const order_list &ol, std::ostream &o)
 {
-	serialize(ol.unit_number, o);
+//	serialize(ol.unit_number, o);
 	serialize(ol.is_cycle, o);
 	serialize(ol.is_bicycle, o);
 //	serialize(ol.min_station, o);
@@ -74,7 +74,7 @@ void serialize(const order_list &ol, std::ostream &o)
 
 void deserialize(order_list &ol, std::istream &i)
 {
-	deserialize(ol.unit_number, i);
+//	deserialize(ol.unit_number, i);
 	deserialize(ol.is_cycle, i);
 	deserialize(ol.is_bicycle, i);
 //	deserialize(ol.min_station, i);
@@ -115,10 +115,20 @@ json_ifile&json_ifile::operator>>(std::string& s)
 	return *this;
 }
 
+json_ifile&json_ifile::operator>>(char* s)
+{
+	char tmp; *is >> tmp;
+	if(!chk_end(tmp)) {
+		assert_q(tmp);
+		do { is->get(tmp); if(tmp != '\"') *(s++) = tmp; } while (tmp != '\"');
+		*s = 0;
+	}
+	return *this;
+}
+
 bool json_ifile::once(order_list& ol)
 {
-	bool ret = _try(ol.unit_number)
-			|| _try(ol.is_cycle)
+	bool ret =	   _try(ol.is_cycle)
 			|| _try(ol.is_bicycle)
 			//		|| _try(ol.min_station)
 			|| _try(ol.cargo)
@@ -139,7 +149,7 @@ bool json_ifile::once(order_list& ol)
 json_ofile& json_ofile::operator<<(const order_list& ol)
 {
 	struct_guard _(*this);
-	return *this << ol.unit_number
+	return *this
 		<< ol.is_cycle
 		<< ol.is_bicycle
 //		<< ol.min_station
@@ -181,7 +191,8 @@ bool json_ifile::once(station_info& si)
 bool json_ifile::once(cargo_info& ci)
 {
 	bool ret = /*_try(ci.label) || */_try(ci.fwd) || _try(ci.rev)
-		|| _try(ci.slice); // TODO: just operator|| ?
+		|| _try(ci.slice) || _try(ci.unit_number);
+	// TODO: just operator|| ?
 	recent.clear();
 	if(ret)
 	 return true;
@@ -191,16 +202,26 @@ bool json_ifile::once(cargo_info& ci)
 		 recent.clear();
 		else
 		 throw "error";
-		return false;	}
+		return false;
+	}
 }
 
-json_ifile&json_ifile::operator>>(std::pair<char, CargoLabel>& pr)
+/*json_ifile& json_ifile::operator>>(std::pair<char, CargoLabel>& pr)
 {
-	//TODO: avoid things like "short", they may not fit the 16bit scheme
-	std::pair<unsigned short, std::string> p2; // TODO: allow fixed size strings
+	static lbl_conv_t lbl_conv;
+	std::pair<byte, char[5]> p2;
 	*this >> p2;
 	pr.first = p2.first;
-	pr.second = 42; // TODO!
+	pr.second = lbl_conv.convert(p2.second);
+	return *this;
+}*/
+
+json_ifile& json_ifile::operator>>(cargo_label_t& c)
+{
+	static lbl_conv_t lbl_conv;
+	char tmp[5];
+	*this >> tmp;
+	c = lbl_conv.convert(tmp);
 	return *this;
 }
 
@@ -232,6 +253,7 @@ void deserialize(railnet_file_info &file, std::istream &i)
 	deserialize(file.stations, i);
 	deserialize(file.cargo_names, i);
 }
+
 bool json_ifile::once(railnet_file_info& fi)
 {
 	// TODO: check version + filetype
@@ -283,6 +305,7 @@ void serialize(const cargo_info& ci, std::ostream& o)
 	serialize(ci.fwd, o);
 	serialize(ci.rev, o);
 	serialize(ci.slice, o);
+	serialize(ci.unit_number, o);
 }
 
 void deserialize(cargo_info& ci, std::istream& i)
@@ -291,22 +314,60 @@ void deserialize(cargo_info& ci, std::istream& i)
 	deserialize(ci.fwd, i);
 	deserialize(ci.rev, i);
 	deserialize(ci.slice, i);
+	deserialize(ci.unit_number, i);
 }
 
 json_ofile& json_ofile::operator<<(const cargo_info& ci)
 {
 	struct_guard _(*this);
-	return *this <</* ci.label <<*/ ci.fwd << ci.rev << ci.slice;
+	return *this <</* ci.label <<*/ ci.fwd << ci.rev << ci.slice
+		<< ci.unit_number;
 }
-
-json_ofile&json_ofile::operator<<(const std::pair<const char, CargoLabel>& pr)
+/*
+json_ofile& json_ofile::operator<<(const std::pair<const char, CargoLabel>& pr)
 {
 	// TODO: avoid things like "short", they may not fit the 16bit scheme
+	static lbl_conv_t lbl_conv;
 	std::pair<unsigned short, char[5]> p2;
 	p2.first = pr.first;
-	strcpy(p2.second, "test"); // TODO!
+	lbl_conv.convert(pr.second, p2.second);
 	return *this << p2;
+}*/
+
+json_ofile& json_ofile::operator<<(const cargo_label_t& c)
+{
+	static lbl_conv_t lbl_conv;
+	return *this << lbl_conv.convert(c);
 }
+
+void prechecks(const railnet_file_info& )
+{
+	// FEATURE, not done yet
+/*	for(const order_list& ol : file.order_lists())
+	{
+		bool fwd, rev;
+		if(ol.cargo().size() > 1)
+		{
+			fwd = ol.cargo().begin()->second.fwd;
+			rev = ol.cargo().begin()->second.rev;
+			for(auto itr = ol.cargo().begin(); itr != ol.cargo().end(); ++itr)
+			{
+				if(itr->second.fwd != fwd || itr->second.rev != rev)
+				 throw "precheck error: two cargos in slice with different fwd/rev flags";
+			}
+		}
+	}*/
+}
+
+/*
+json_ofile& json_ofile::operator<<(const std::pair<CargoLabel, cargo_info>& pr)
+{
+	static lbl_conv_t lbl_conv;
+	std::pair<char[5], cargo_info> p2;
+	p2.first = pr.first;
+	lbl_conv.convert(pr.first, p2.first);
+	return *this << p2;
+}*/
 
 }
 

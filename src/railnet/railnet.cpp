@@ -14,7 +14,6 @@
 #include <getopt.h>
 #include <cmath>
 #include <cstdlib>
-#include <algorithm>
 
 #include "common.h"
 #include "railnet_node_list.h"
@@ -40,21 +39,7 @@ void print_help()
 	options::usage();
 }
 
-//! Converter to convert a CargoLabel into a C string
-union lbl_to_str_t
-{
-private:
-	int lbl[2];
-	char str[8];
-public:
-	lbl_to_str_t() : lbl{0,0} {}
-	const char* convert(int value)
-	{
-		lbl[0] = value;
-		std::reverse(str, str + 4);
-		return str;
-	}
-} lbl_to_str;
+lbl_conv_t lbl_conv;
 
 //! main routine of the railnet converter
 int run(const options& opt)
@@ -71,7 +56,7 @@ int run(const options& opt)
 
 	for(const auto& pr : file.cargo_names.get())
 	{
-		const char* str = lbl_to_str.convert(pr.second);
+		const char* str = lbl_conv.convert(pr.second);
 
 		if(opt.command == options::cmd_list_cargo)
 		 std::cout << str << std::endl;
@@ -94,7 +79,7 @@ int run(const options& opt)
 	{
 		++next;
 		bool cargo_found = false;
-		for(std::map<CargoLabel, comm::cargo_info>::const_iterator itr2 = itr->cargo.get().begin();
+		for(std::map<cargo_label_t, comm::cargo_info>::const_iterator itr2 = itr->cargo.get().begin();
 			!cargo_found && itr2 != itr->cargo.get().end(); ++itr2)
 		 cargo_found = (cargo_ids.find(itr2->first) != cargo_ids.end());
 		if(!cargo_found)
@@ -142,18 +127,15 @@ int run(const options& opt)
 	for(std::list<comm::order_list>::const_iterator itr =
 		file.order_lists.get().begin();
 		itr != file.order_lists.get().end(); ++itr)
+	if(itr->stations.get().size())
 	{
-		if(itr->stations.get().size())
+		const comm::order_list& ol = *itr;
+		for(std::vector<std::pair<StationID, bool> >::const_iterator
+				itr = ol.stations.get().begin();
+				itr != ol.stations.get().end(); ++itr)
 		{
-			const comm::order_list& ol = *itr;
-			for(std::vector<std::pair<StationID, bool> >::const_iterator
-					itr = ol.stations.get().begin();
-					itr != ol.stations.get().end(); ++itr)
-			{
-				station_flags[itr->first] |= itr->second ? st_used : st_passed;
-			}
+			station_flags[itr->first] |= itr->second ? st_used : st_passed;
 		}
-
 	}
 
 	// this is required for the drawing algorithm
@@ -253,7 +235,7 @@ int run(const options& opt)
 			}
 			std::cout << std::endl;
 
-			auto print_end = [&](bool double_edge, const std::map<CargoLabel, comm::cargo_info>& cargo)
+			auto print_end = [&](bool double_edge, const std::map<cargo_label_t, comm::cargo_info>& cargo)
 			{
 				// values below 50 get difficult to read
 				float _value = 0.5f + (value/2.0f);
@@ -269,7 +251,7 @@ int run(const options& opt)
 					for(const std::pair<const CargoLabel, comm::cargo_info>& id : cargo)
 					{
 						std::cout << (first ? "" : ", ")
-							<< lbl_to_str.convert(id.first);
+							<< lbl_conv.convert(id.first);
 						first = false;
 					}
 					std::cout << "\"";
