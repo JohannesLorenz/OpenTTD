@@ -41,6 +41,8 @@ typedef uint32 CargoLabel;
 
 #include "json_static.h"
 
+const UnitID no_unit_no = std::numeric_limits<UnitID>::max();
+
 //! Converter to convert between CargoLabels and C strings
 union lbl_conv_t
 {
@@ -113,13 +115,65 @@ enum s_id
 
 const char* string_no(std::size_t id);
 
+struct cargo_set
+{
+	typedef std::map<CargoLabel, CargoID> mapping_t;
+	static mapping_t mapping;
+	u_int64_t cargo;
+	CargoID next_free_id = 0;
+	void add(CargoID id, CargoLabel lbl) {
+		auto itr = mapping.find(lbl);
+		if(itr == mapping.end())
+		 mapping.emplace(lbl, id);
+		add_id(id);
+	}
+	void add_id(CargoID id) {
+		static_assert(NUM_CARGO <= (sizeof(cargo) << 3),
+			"Your int type is too small to hold all types of cargo.");
+		cargo |= (1 << id);
+	}
+	void add_label(CargoLabel lbl) {
+		auto itr = mapping.find(lbl);
+		if(itr == mapping.end())
+		 mapping.emplace(lbl, next_free_id++);
+		add_id(itr->second);
+	}
+	class iterator_t
+	{
+		const cargo_set& cs;
+		mapping_t::const_iterator itr;
+	public:
+		cargo_label_t operator*() {
+			return itr->first;
+		}
+		iterator_t& operator++() {
+			for(; itr != mapping.end() && !(cs.cargo & (1 << itr->second)); ++itr) ;
+			return ++itr, *this; }
+		iterator_t(const cargo_set& cs,
+			const mapping_t::const_iterator& itr) :
+			cs(cs),
+			itr(itr)
+		{
+		}
+	};
+
+	friend class iterator_t;
+
+	typedef cargo_label_t value_type;
+	iterator_t begin() const { return iterator_t { *this, mapping.begin() }; }
+	iterator_t end() const { return iterator_t { *this, mapping.begin() }; }
+	void insert(iterator_t& , cargo_label_t lbl) { add_label(lbl); }
+};
+
 struct cargo_info
 {
 //	smem<CargoLabel, s_label> label;
 	smem<bool, s_fwd> fwd;
 	smem<bool, s_rev> rev;
 	smem<int, s_slice> slice;
-	smem<UnitID, s_unit_number> unit_number;
+	bool is_bicycle() const { return fwd && rev; }
+//	smem<UnitID, s_unit_number> unit_number;
+//	smem<UnitID, s_unit_number> rev_unit_no;
 /*	bool operator<(const cargo_info& rhs) const {
 		return (slice == rhs.slice) ? label < rhs.label
 	    : slice < rhs.slice }*/
@@ -127,8 +181,8 @@ struct cargo_info
 
 struct order_list
 {
-//	smem<UnitID, s_unit_number> unit_number;
-//	smem<UnitID, s_rev_unit_no> rev_unit_no;
+	smem<UnitID, s_unit_number> unit_number;
+	smem<UnitID, s_rev_unit_no> rev_unit_no;
 	smem<bool, s_is_cycle> is_cycle;
 	smem<bool, s_is_bicycle> is_bicycle; //! at least two trains that drive in opposite cycles
 //	smem<StationID, s_min_station> min_station;
@@ -136,7 +190,10 @@ struct order_list
 	int next_cargo_slice;
 	smem<std::vector<std::pair<StationID, bool> >, s_stations> stations;
 //	smem<std::size_t, s_real_stations> real_stations;
-	order_list() : is_cycle(false), is_bicycle(false), next_cargo_slice(1) /*,
+	order_list() :
+		unit_number(no_unit_no),
+		rev_unit_no(no_unit_no),
+		is_cycle(false), is_bicycle(false), next_cargo_slice(1) /*,
 		min_station(std::numeric_limits<StationID>::max()),
 		real_stations(0)*/
 	{

@@ -70,6 +70,8 @@ void serialize(const order_list &ol, std::ostream &o)
 //	serialize(ol.min_station, o);
 	serialize(ol.cargo, o);
 	serialize(ol.stations, o);
+	serialize(ol.unit_number, o);
+	serialize(ol.rev_unit_no, o);
 }
 
 void deserialize(order_list &ol, std::istream &i)
@@ -80,6 +82,8 @@ void deserialize(order_list &ol, std::istream &i)
 //	deserialize(ol.min_station, i);
 	deserialize(ol.cargo, i);
 	deserialize(ol.stations, i);
+	deserialize(ol.unit_number, i);
+	deserialize(ol.rev_unit_no, i);
 }
 
 json_ifile&json_ifile::operator>>(bool& b)
@@ -132,7 +136,9 @@ bool json_ifile::once(order_list& ol)
 			|| _try(ol.is_bicycle)
 			//		|| _try(ol.min_station)
 			|| _try(ol.cargo)
-			|| _try(ol.stations);
+			|| _try(ol.stations)
+			|| _try(ol.unit_number)
+			|| _try(ol.rev_unit_no);
 	recent.clear();
 
 	if(ret)
@@ -154,7 +160,9 @@ json_ofile& json_ofile::operator<<(const order_list& ol)
 		<< ol.is_bicycle
 //		<< ol.min_station
 		<< ol.cargo
-		<< ol.stations;
+		<< ol.stations
+		<< ol.unit_number
+		<< ol.rev_unit_no;
 }
 
 void serialize(const station_info &si, std::ostream &o)
@@ -191,7 +199,7 @@ bool json_ifile::once(station_info& si)
 bool json_ifile::once(cargo_info& ci)
 {
 	bool ret = /*_try(ci.label) || */_try(ci.fwd) || _try(ci.rev)
-		|| _try(ci.slice) || _try(ci.unit_number);
+		|| _try(ci.slice) /* || _try(ci.unit_number)*/;
 	// TODO: just operator|| ?
 	recent.clear();
 	if(ret)
@@ -305,7 +313,7 @@ void serialize(const cargo_info& ci, std::ostream& o)
 	serialize(ci.fwd, o);
 	serialize(ci.rev, o);
 	serialize(ci.slice, o);
-	serialize(ci.unit_number, o);
+//	serialize(ci.unit_number, o);
 }
 
 void deserialize(cargo_info& ci, std::istream& i)
@@ -314,14 +322,14 @@ void deserialize(cargo_info& ci, std::istream& i)
 	deserialize(ci.fwd, i);
 	deserialize(ci.rev, i);
 	deserialize(ci.slice, i);
-	deserialize(ci.unit_number, i);
+//	deserialize(ci.unit_number, i);
 }
 
 json_ofile& json_ofile::operator<<(const cargo_info& ci)
 {
 	struct_guard _(*this);
-	return *this <</* ci.label <<*/ ci.fwd << ci.rev << ci.slice
-		<< ci.unit_number;
+	return *this <</* ci.label <<*/ ci.fwd << ci.rev << ci.slice;
+	//<< ci.unit_number;
 }
 /*
 json_ofile& json_ofile::operator<<(const std::pair<const char, CargoLabel>& pr)

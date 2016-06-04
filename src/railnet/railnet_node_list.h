@@ -32,29 +32,22 @@ private:
 public:
 	void init_nodes(const comm::order_list& ol)
 	{
-		for(const comm::cargo_info& ci : ol)
+		std::size_t nth = 0;
+		UnitID unit_no = ol.unit_number;
+
+		for(const auto& pr : ol.stations.get())
+		 if(pr.second) /* if train stops */
+		  visit(unit_no, pr.first, nth++);
+
+		if(ol.rev_unit_no != no_unit_no)
 		{
-			std::size_t nth = 0;
-			UnitID;
-
-			if(ci.fwd)
-			{
-				unit_no = ci.unit_number;
-				for(const auto& pr : ol.stations.get())
-				 if(pr.second) /* if train stops */
-				  visit(unit_no, pr.first, nth++);
-			}
-
-			if(ci.rev)
-			{
-				nth = 0;
-				unit_no = ci.rev_unit_no;
-				for(std::vector<std::pair<StationID, bool>>::const_reverse_iterator
-					r = ol.stations.get().rbegin();
-					r != ol.stations.get().rend(); ++r)
-				 if(r->second) // if train stops
-				  visit(unit_no, r->first, nth++);
-			}
+			nth = 0;
+			unit_no = ol.rev_unit_no;
+			for(std::vector<std::pair<StationID, bool>>::const_reverse_iterator
+				r = ol.stations.get().rbegin();
+				r != ol.stations.get().rend(); ++r)
+			 if(r->second) // if train stops
+			  visit(unit_no, r->first, nth++);
 		}
 	}
 
@@ -62,25 +55,21 @@ public:
 	void init_rest(const comm::order_list& ol)
 	{
 		// assumption: same slice => same unit number/same reverse unit number
+		UnitID unit_no = ol.unit_number;
+		lengths[unit_no] = ol.stations().size();
 
-		for(const comm::cargo_info& ci : ol)
+		for(const auto& ci : ol.cargo())
+		 if(ci.second.fwd)
+		  cargo[unit_no].insert(ci.first);
+
+		if(ol.rev_unit_no != no_unit_no)
 		{
-			UnitID unit_no = ci.unit_number;
+			unit_no = ol.rev_unit_no;
 			lengths[unit_no] = ol.stations().size();
-
-			if(ci.fwd)
-			for(const std::pair<const CargoLabel, comm::cargo_info>& c :
+			for(const std::pair<CargoLabel, comm::cargo_info>& c :
 				ol.cargo())
-			 cargo[unit_no].insert(c.first);
-
-			if(ci.rev) // TODO: common func, avoid code dupl?
-			{
-				unit_no = ci.rev_unit_no;
-				lengths[unit_no] = ol.stations().size();
-				for(const std::pair<CargoLabel, comm::cargo_info>& c :
-					ol.cargo())
-				 cargo[unit_no].insert(c.first);
-			}
+			 if(c.second.rev)
+			  cargo[unit_no].insert(c.first);
 		}
 	}
 

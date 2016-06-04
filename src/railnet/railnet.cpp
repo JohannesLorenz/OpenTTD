@@ -78,12 +78,22 @@ int run(const options& opt)
 		itr != file.order_lists.get().end(); itr = next)
 	{
 		++next;
-		bool cargo_found = false;
+/*		bool cargo_found = false;
 		for(std::map<cargo_label_t, comm::cargo_info>::const_iterator itr2 = itr->cargo.get().begin();
 			!cargo_found && itr2 != itr->cargo.get().end(); ++itr2)
 		 cargo_found = (cargo_ids.find(itr2->first) != cargo_ids.end());
 		if(!cargo_found)
-		 file.order_lists.get().erase(itr);
+		 file.order_lists.get().erase(itr);*/
+		std::map<cargo_label_t, comm::cargo_info>::const_iterator itr2, next2;
+		for(itr2 = itr->cargo.get().begin();
+			!cargo_found && itr2 != itr->cargo.get().end(); itr2 = next2)
+		{
+			++next2;
+			if(cargo_ids.find(itr2->first) == cargo_ids.end())
+			 itr->cargo().erase(itr2);
+		}
+		if(itr->cargo().empty())
+		 file.order_lists().erase(itr);
 	}
 	}
 
@@ -192,6 +202,8 @@ int run(const options& opt)
 	for(std::list<comm::order_list>::const_iterator itr3 =
 		file.order_lists.get().begin();
 		itr3 != file.order_lists.get().end(); ++itr3)
+	for(std::map<cargo_label_t, cargo_info>::const_iterator itr4 = itr3->cargo().begin();
+		itr4 != itr3->cargo().end(); ++itr4)
 	{
 		hue = fmod(hue += order_list_step, 1.0f);
 		value = fmod(value += order_list_step_2, 1.0f);
@@ -200,7 +212,8 @@ int run(const options& opt)
 		{
 			const comm::order_list& ol = *itr3;
 			const auto& cur_stations = ol.stations.get();
-			bool only_double_edges = ol.is_bicycle;
+			bool only_double_edges = itr4->is_bicycle(); //ol.is_bicycle;
+			// TODO: non-bicycles: iterate backwards?
 			std::size_t double_edges = 0;
 			std::size_t mid = cur_stations.size() >> 1;
 
@@ -280,7 +293,7 @@ int run(const options& opt)
 
 				edge_type_t edge_type = edge_type_t::unique;
 
-				if(ol.is_bicycle)
+				if(itr4->is_bicycle())
 					edge_type = edge_type_t::duplicate_first;
 				else
 				{
