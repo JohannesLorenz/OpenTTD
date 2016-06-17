@@ -559,6 +559,7 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 							is_same ? no_unit_no : train->unitnumber*/
 							}
 						));
+					cargo_used.insert(new_i->first);
 				}
 				else
 				{ // step (2)
@@ -691,7 +692,9 @@ void VideoDriver_Railnet::MainLoop()
 
 	if (!detail::is_same<CargoLabel, uint32>::value ||
 		!detail::is_same<StationID, uint16>::value ||
-		!detail::is_same<UnitID, uint16>::value) {
+		!detail::is_same<UnitID, uint16>::value ||
+		!detail::is_same<CargoID, byte>::value)
+	{
 		std::cerr << "Error! Types changed in OpenTTD. "
 			"Programmers must fix this here." << std::endl;
 		assert(false);

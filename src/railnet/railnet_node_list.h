@@ -17,16 +17,6 @@ struct node_list_t
 
 private:
 	void visit(UnitID u, StationID s, times_t nth) {
-		if(s)
-		{
-			std::cerr << "s" << std::endl;
-		}
-		if(u)
-			std::cerr << "u" << std::endl;
-		if(nth)
-			std::cerr << "nth" << std::endl;
-		if(nodes.size())
-			std::cerr << "sz" << std::endl;
 		nodes[s].emplace(u, nth);
 	}
 public:
