@@ -34,6 +34,7 @@ typedef uint32_t uint32;
 typedef uint16 StationID;
 typedef uint16 UnitID; // TODO: remove or type assertion
 typedef uint32 CargoLabel;
+typedef byte CargoID;
 #else
 #include "../station_base.h"
 #include "../transport_type.h"
@@ -115,6 +116,7 @@ enum s_id
 
 const char* string_no(std::size_t id);
 
+#if 0
 struct cargo_set
 {
 	typedef std::map<CargoLabel, CargoID> mapping_t;
@@ -164,6 +166,7 @@ struct cargo_set
 	iterator_t end() const { return iterator_t { *this, mapping.begin() }; }
 	void insert(iterator_t& , cargo_label_t lbl) { add_label(lbl); }
 };
+#endif
 
 struct cargo_info
 {
@@ -230,6 +233,7 @@ struct railnet_file_info
 
 struct railnet_file_info
 {
+	static constexpr int _version = 0;
 	smem<std::string, s_mimetype> hdr;
 	smem<int, s_version> version;
 	smem<std::list<order_list>, s_order_lists> order_lists;
@@ -237,7 +241,7 @@ struct railnet_file_info
 	/*FEATURE: char suffices, but need short to print it*/
 	smem<std::map<unsigned char, cargo_label_t>, s_cargo_names> cargo_names;
 
-	railnet_file_info() : hdr("openttd/railnet"), version(0) {}
+	railnet_file_info() : hdr("openttd/railnet"), version(_version) {}
 };
 
 /*
@@ -712,7 +716,6 @@ public:
 				value_type tmp;
 				*this >> tmp;
 				detail::push_back(v, std::move(tmp));
-				std::cerr << "pushed back, size: " << v.size() << std::endl;
 			}
 			if(!end_hit())
 			{

@@ -28,6 +28,8 @@ namespace dtl {
 	}
 }
 
+constexpr int railnet_file_info::_version;
+
 const char* strings[s_size] =
 {
 	"unit_number",
