@@ -83,6 +83,7 @@ spritecache.cpp
 station.cpp
 strgen/strgen_base.cpp
 railnet/common.cpp
+railnet/json_static.cpp
 string.cpp
 stringfilter.cpp
 strings.cpp

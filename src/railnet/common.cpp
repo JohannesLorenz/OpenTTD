@@ -55,7 +55,8 @@ const char* strings[S_SIZE] =
 	"mimetype",
 };
 
-const char* StringNo(std::size_t id) { return strings[id]; }
+const char* RailnetStrings::StringNo(std::size_t id) {
+	return strings[id]; }
 
 /*bool order_list::operator<(const order_list &other) const
 {
@@ -64,67 +65,15 @@ const char* StringNo(std::size_t id) { return strings[id]; }
 		: min_station < other.min_station;
 }*/
 
-void JsonIfileBase::ReadBool(bool& b, std::istream* is)
-{
-	char tmp[6];
-	tmp[5]=tmp[4]=0;
-	*is >> tmp[0];
-	if(!ChkEnd(*tmp))
-	{
-		*is >> tmp[1];
-		*is >> tmp[2];
-		*is >> tmp[3];
-		if(!strncmp(tmp, "true", 4))
-			b = true;
-		else
-		{
-			*is >> tmp[4];
-			if(!strncmp(tmp, "false", 5))
-				b = false;
-			else throw "boolean must be 'true' or 'false'";
-		}
-	}
-}
-
-void JsonIfileBase::ReadString(std::string& s, std::istream* is)
-{
-	char tmp; *is >> tmp;
-	if(!ChkEnd(tmp)) {
-		assert_q(tmp);
-		do { is->get(tmp); if(tmp != '\"') s.push_back(tmp); } while (tmp != '\"');
-	}
-}
-
-void JsonIfileBase::ReadCStr(char* s, std::istream* is)
-{
-	char tmp; *is >> tmp;
-	if(!ChkEnd(tmp)) {
-		assert_q(tmp);
-		do { is->get(tmp); if(tmp != '\"') *(s++) = tmp; } while (tmp != '\"');
-		*s = 0;
-	}
-}
-
 bool RailnetIfile::Once(OrderList& ol)
 {
-	bool ret =	   Try(ol.is_cycle)
+	return		Try(ol.is_cycle)
 			|| Try(ol.is_bicycle)
 			//		|| Try(ol.min_station)
 			|| Try(ol.cargo)
 			|| Try(ol.stations)
 			|| Try(ol.unit_number)
 			|| Try(ol.rev_unit_no);
-	recent.clear();
-
-	if(ret)
-		return true;
-	else
-	{
-		if(recent == "}")
-			recent.clear();
-		else
-			throw "error";
-		return false;		}
 }
 
 RailnetOfile& RailnetOfile::operator<<(const OrderList& ol)
@@ -141,37 +90,12 @@ RailnetOfile& RailnetOfile::operator<<(const OrderList& ol)
 
 bool RailnetIfile::Once(StationInfo& si)
 {
-	bool ret = Try(si.name)
-		|| Try(si.x)
-		|| Try(si.y);
-	recent.clear();
-	if(ret)
-	 return true;
-	else
-	{
-		if(recent == "}")
-		 recent.clear();
-		else
-		 throw "error";
-		return false;	}
+	return	Try(si.name) || Try(si.x) || Try(si.y);
 }
 
 bool RailnetIfile::Once(CargoInfo& ci)
 {
-	bool ret = /*Try(ci.label) || */Try(ci.fwd) || Try(ci.rev)
-		|| Try(ci.slice) /* || Try(ci.unit_number)*/;
-	// TODO: just operator|| ?
-	recent.clear();
-	if(ret)
-	 return true;
-	else
-	{
-		if(recent == "}")
-		 recent.clear();
-		else
-		 throw "error";
-		return false;
-	}
+	return Try(ci.fwd) || Try(ci.rev) || Try(ci.slice);
 }
 
 /*JsonIfile& JsonIfile::operator>>(std::pair<char, CargoLabel>& pr)
@@ -196,12 +120,7 @@ RailnetIfile& RailnetIfile::operator>>(CargoLabelT& c)
 RailnetOfile& RailnetOfile::operator<<(const StationInfo& si)
 {
 	StructGuard _(*this);
-	//return *this << si.name
-	//	     << si.x
-	//	     << si.y;
-	return *this << si.name
-	<< si.x
-	<< si.y;
+	return *this << si.name << si.x << si.y;
 }
 
 bool RailnetIfile::Once(RailnetFileInfo& fi)
@@ -215,7 +134,6 @@ bool RailnetIfile::Once(RailnetFileInfo& fi)
 		|| Try(fi.order_lists)
 		|| Try(fi.stations)
 		|| Try(fi.cargo_names);
-	recent.clear();
 	if(ret)
 	{
 		// FEATURE: put this into operator<< ? i.e.:
@@ -225,28 +143,14 @@ bool RailnetIfile::Once(RailnetFileInfo& fi)
 			throw "version mismatch";
 		else if(tmp_hdr().length() && tmp_hdr() != fi.hdr())
 			throw "header signature does not match";
-		else return true;
 	}
-	else
-	{
-		if(recent == "}")
-		 recent.clear();
-		else
-		 throw "error";
-		return false;
-	}
-/*	if(ret) return *this;
-	else throw "no key for RailnetFileInfo matched the found key"; */
+
+	return ret;
 }
 
 RailnetOfile& RailnetOfile::operator<<(const RailnetFileInfo& fi)
 {
 	StructGuard _(*this);
-	/*return *this << fi.hdr
-		<< fi.version
-		<< fi.order_lists
-		<< fi.stations
-		<< fi.cargo_names;*/
 	return *this << fi.hdr
 		<< fi.version
 		<< fi.order_lists
@@ -260,11 +164,8 @@ RailnetOfile& RailnetOfile::operator<<(const CargoInfo& ci)
 	return *this << ci.fwd
 		<< ci.rev
 		<< ci.slice;
-#if 0
-	return *this <</* ci.label <<*/ ci.fwd << ci.rev << ci.slice;
-#endif
-	//<< ci.unit_number;
 }
+
 /*
 railnet_writer& railnet_writer::operator<<(const std::pair<const char, CargoLabel>& pr)
 {
@@ -279,7 +180,6 @@ railnet_writer& railnet_writer::operator<<(const std::pair<const char, CargoLabe
 RailnetOfile& RailnetOfile::operator<<(const CargoLabelT& c)
 {
 	static LblConvT lbl_conv;
-//	return *this << lbl_conv.Convert(c);
 	return *this << lbl_conv.Convert(c);
 }
 
