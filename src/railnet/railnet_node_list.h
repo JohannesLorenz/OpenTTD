@@ -20,7 +20,7 @@ private:
 		nodes[s].emplace(u, nth);
 	}
 public:
-	void init_nodes(const comm::order_list& ol)
+	void init_nodes(const comm::OrderList& ol)
 	{
 		std::size_t nth = 0;
 		UnitID unit_no = ol.unit_number;
@@ -42,7 +42,7 @@ public:
 	}
 
 	// to call this, the stations and cargo must be known already
-	void init_rest(const comm::order_list& ol)
+	void init_rest(const comm::OrderList& ol)
 	{
 		// assumption: same slice => same unit number/same reverse unit number
 		UnitID unit_no = ol.unit_number;
@@ -56,14 +56,14 @@ public:
 		{
 			unit_no = ol.rev_unit_no;
 			lengths[unit_no] = ol.stations().size();
-			for(const std::pair<CargoLabel, comm::cargo_info>& c :
+			for(const std::pair<CargoLabel, comm::CargoInfo>& c :
 				ol.cargo())
 			 if(c.second.rev)
 			  cargo[unit_no].insert(c.first);
 		}
 	}
 
-	void init(const comm::order_list& ol) {
+	void init(const comm::OrderList& ol) {
 		init_nodes(ol);
 		init_rest(ol);
 	}
@@ -189,7 +189,7 @@ public:
 	//! @param matches the resulting matches will be stored here if non NULL
 	//! @param neg whether to negate the direction of @a ol
 	//! @return subset type of @a ol
-	int traverse(const comm::order_list& ol, std::map<UnitID, superset_type>* matches,
+	int traverse(const comm::OrderList& ol, std::map<UnitID, superset_type>* matches,
 		bool neg, bool ignore_cargo) const
 	{
 		if(matches)

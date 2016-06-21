@@ -39,7 +39,7 @@ namespace detail {
 }
 
 template<class T, std::size_t Str>
-class smem
+class SMem
 {
 	T val;
 public:
@@ -49,8 +49,8 @@ public:
 	operator const T& () const { return get(); }
 	T& operator()() { return get(); }
 	const T& operator()() const { return get(); }
-	smem() {}
-	smem(const T& val) : val(val) {}
+	SMem() {}
+	SMem(const T& val) : val(val) {}
 };
 
 #endif // JSON_STATIC_H

@@ -16,16 +16,16 @@
 typedef uint32 CargoLabel; // forward declaration
 
 namespace comm {
-	struct railnet_file_info;
+	struct RailnetFileInfo;
 }
 
 class VideoDriver_Railnet : public VideoDriver_Null {
-	void SaveOrderList(comm::railnet_file_info& file, const Train *train,
+	void SaveOrderList(comm::RailnetFileInfo& file, const Train *train,
 		std::vector<bool> &stations_used, std::set<CargoLabel> &cargo_used, std::set<const OrderList *> &order_lists_done,
 		struct node_list_t& node_list) const;
-	void SaveStation(comm::railnet_file_info& file, const struct BaseStation* st,
+	void SaveStation(comm::RailnetFileInfo& file, const struct BaseStation* st,
 		const std::vector<bool> &stations_used) const;
-	void SaveCargoLabels(comm::railnet_file_info &file, std::set<CargoLabel> &s) const;
+	void SaveCargoLabels(comm::RailnetFileInfo &file, std::set<CargoLabel> &s) const;
 public:
 	VideoDriver_Railnet();
 	/* virtual */ void MainLoop();
