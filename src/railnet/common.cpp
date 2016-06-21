@@ -28,9 +28,9 @@ namespace dtl {
 	}
 }
 
-constexpr int railnet_file_info::_version;
+constexpr int RailnetFileInfo::_version;
 
-const char* strings[s_size] =
+const char* strings[S_SIZE] =
 {
 	"unit_number",
 	"rev_unit_no",
@@ -55,7 +55,7 @@ const char* strings[s_size] =
 	"mimetype",
 };
 
-const char* string_no(std::size_t id) { return strings[id]; }
+const char* StringNo(std::size_t id) { return strings[id]; }
 
 /*bool order_list::operator<(const order_list &other) const
 {
@@ -64,36 +64,12 @@ const char* string_no(std::size_t id) { return strings[id]; }
 		: min_station < other.min_station;
 }*/
 
-void serialize(const order_list &ol, std::ostream &o)
-{
-//	serialize(ol.unit_number, o);
-	serialize(ol.is_cycle, o);
-	serialize(ol.is_bicycle, o);
-//	serialize(ol.min_station, o);
-	serialize(ol.cargo, o);
-	serialize(ol.stations, o);
-	serialize(ol.unit_number, o);
-	serialize(ol.rev_unit_no, o);
-}
-
-void deserialize(order_list &ol, std::istream &i)
-{
-//	deserialize(ol.unit_number, i);
-	deserialize(ol.is_cycle, i);
-	deserialize(ol.is_bicycle, i);
-//	deserialize(ol.min_station, i);
-	deserialize(ol.cargo, i);
-	deserialize(ol.stations, i);
-	deserialize(ol.unit_number, i);
-	deserialize(ol.rev_unit_no, i);
-}
-
-json_ifile&json_ifile::operator>>(bool& b)
+void JsonIfileBase::ReadBool(bool& b, std::istream* is)
 {
 	char tmp[6];
 	tmp[5]=tmp[4]=0;
 	*is >> tmp[0];
-	if(!chk_end(*tmp))
+	if(!ChkEnd(*tmp))
 	{
 		*is >> tmp[1];
 		*is >> tmp[2];
@@ -108,39 +84,36 @@ json_ifile&json_ifile::operator>>(bool& b)
 			else throw "boolean must be 'true' or 'false'";
 		}
 	}
-	return *this;
 }
 
-json_ifile&json_ifile::operator>>(std::string& s)
+void JsonIfileBase::ReadString(std::string& s, std::istream* is)
 {
 	char tmp; *is >> tmp;
-	if(!chk_end(tmp)) {
+	if(!ChkEnd(tmp)) {
 		assert_q(tmp);
 		do { is->get(tmp); if(tmp != '\"') s.push_back(tmp); } while (tmp != '\"');
 	}
-	return *this;
 }
 
-json_ifile&json_ifile::operator>>(char* s)
+void JsonIfileBase::ReadCStr(char* s, std::istream* is)
 {
 	char tmp; *is >> tmp;
-	if(!chk_end(tmp)) {
+	if(!ChkEnd(tmp)) {
 		assert_q(tmp);
 		do { is->get(tmp); if(tmp != '\"') *(s++) = tmp; } while (tmp != '\"');
 		*s = 0;
 	}
-	return *this;
 }
 
-bool json_ifile::once(order_list& ol)
+bool RailnetIfile::Once(OrderList& ol)
 {
-	bool ret =	   _try(ol.is_cycle)
-			|| _try(ol.is_bicycle)
-			//		|| _try(ol.min_station)
-			|| _try(ol.cargo)
-			|| _try(ol.stations)
-			|| _try(ol.unit_number)
-			|| _try(ol.rev_unit_no);
+	bool ret =	   Try(ol.is_cycle)
+			|| Try(ol.is_bicycle)
+			//		|| Try(ol.min_station)
+			|| Try(ol.cargo)
+			|| Try(ol.stations)
+			|| Try(ol.unit_number)
+			|| Try(ol.rev_unit_no);
 	recent.clear();
 
 	if(ret)
@@ -154,11 +127,10 @@ bool json_ifile::once(order_list& ol)
 		return false;		}
 }
 
-json_ofile& json_ofile::operator<<(const order_list& ol)
+RailnetOfile& RailnetOfile::operator<<(const OrderList& ol)
 {
-	struct_guard _(*this);
-	return *this
-		<< ol.is_cycle
+	StructGuard _(*this);
+	return	*this << ol.is_cycle
 		<< ol.is_bicycle
 //		<< ol.min_station
 		<< ol.cargo
@@ -167,25 +139,11 @@ json_ofile& json_ofile::operator<<(const order_list& ol)
 		<< ol.rev_unit_no;
 }
 
-void serialize(const station_info &si, std::ostream &o)
+bool RailnetIfile::Once(StationInfo& si)
 {
-	serialize(si.name, o);
-	serialize(si.x, o);
-	serialize(si.y, o);
-}
-
-void deserialize(station_info &si, std::istream &i)
-{
-	deserialize(si.name, i);
-	deserialize(si.x, i);
-	deserialize(si.y, i);
-}
-
-bool json_ifile::once(station_info& si)
-{
-	bool ret = _try(si.name)
-		|| _try(si.x)
-		|| _try(si.y);
+	bool ret = Try(si.name)
+		|| Try(si.x)
+		|| Try(si.y);
 	recent.clear();
 	if(ret)
 	 return true;
@@ -198,10 +156,10 @@ bool json_ifile::once(station_info& si)
 		return false;	}
 }
 
-bool json_ifile::once(cargo_info& ci)
+bool RailnetIfile::Once(CargoInfo& ci)
 {
-	bool ret = /*_try(ci.label) || */_try(ci.fwd) || _try(ci.rev)
-		|| _try(ci.slice) /* || _try(ci.unit_number)*/;
+	bool ret = /*Try(ci.label) || */Try(ci.fwd) || Try(ci.rev)
+		|| Try(ci.slice) /* || Try(ci.unit_number)*/;
 	// TODO: just operator|| ?
 	recent.clear();
 	if(ret)
@@ -216,65 +174,47 @@ bool json_ifile::once(cargo_info& ci)
 	}
 }
 
-/*json_ifile& json_ifile::operator>>(std::pair<char, CargoLabel>& pr)
+/*JsonIfile& JsonIfile::operator>>(std::pair<char, CargoLabel>& pr)
 {
-	static lbl_conv_t lbl_conv;
+	static LblConvT lbl_conv;
 	std::pair<byte, char[5]> p2;
 	*this >> p2;
 	pr.first = p2.first;
-	pr.second = lbl_conv.convert(p2.second);
+	pr.second = lbl_conv.Convert(p2.second);
 	return *this;
 }*/
 
-json_ifile& json_ifile::operator>>(cargo_label_t& c)
+RailnetIfile& RailnetIfile::operator>>(CargoLabelT& c)
 {
-	static lbl_conv_t lbl_conv;
+	static LblConvT lbl_conv;
 	char tmp[5];
 	*this >> tmp;
-	c = lbl_conv.convert(tmp);
+	c = lbl_conv.Convert(tmp);
 	return *this;
 }
 
-json_ofile& json_ofile::operator<<(const station_info& si)
+RailnetOfile& RailnetOfile::operator<<(const StationInfo& si)
 {
-	struct_guard _(*this);
+	StructGuard _(*this);
+	//return *this << si.name
+	//	     << si.x
+	//	     << si.y;
 	return *this << si.name
-		     << si.x
-		     << si.y;
-}
-void serialize(const railnet_file_info &file, std::ostream &o)
-{
-	serialize(file.hdr, o);
-	serialize(file.version, o);
-	serialize(file.order_lists, o);
-	serialize(file.stations, o);
-	serialize(file.cargo_names, o);
+	<< si.x
+	<< si.y;
 }
 
-void deserialize(railnet_file_info &file, std::istream &i)
-{
-	std::string found_hdr;
-	deserialize(found_hdr, i);
-	assert(found_hdr=="openttd/railnet");
-	uint version;
-	deserialize(version, i);
-	assert(version==0);
-	deserialize(file.order_lists, i);
-	deserialize(file.stations, i);
-	deserialize(file.cargo_names, i);
-}
-
-bool json_ifile::once(railnet_file_info& fi)
+bool RailnetIfile::Once(RailnetFileInfo& fi)
 {
 	// TODO: check version + filetype
-	smem<std::string, s_mimetype> tmp_hdr;
-	smem<int, s_version> tmp_version = -1;
+	SMem<std::string, S_MIMETYPE> tmp_hdr;
+	SMem<int, S_VERSION> tmp_version = -1;
 
-	bool ret = _try(tmp_hdr)
-		|| _try(tmp_version)
-		|| _try(fi.order_lists)
-		|| _try(fi.stations)
-		|| _try(fi.cargo_names);
+	bool ret = Try(tmp_hdr)
+		|| Try(tmp_version)
+		|| Try(fi.order_lists)
+		|| Try(fi.stations)
+		|| Try(fi.cargo_names);
 	recent.clear();
 	if(ret)
 	{
@@ -296,12 +236,17 @@ bool json_ifile::once(railnet_file_info& fi)
 		return false;
 	}
 /*	if(ret) return *this;
-	else throw "no key for railnet_file_info matched the found key"; */
+	else throw "no key for RailnetFileInfo matched the found key"; */
 }
 
-json_ofile& json_ofile::operator<<(const railnet_file_info& fi)
+RailnetOfile& RailnetOfile::operator<<(const RailnetFileInfo& fi)
 {
-	struct_guard _(*this);
+	StructGuard _(*this);
+	/*return *this << fi.hdr
+		<< fi.version
+		<< fi.order_lists
+		<< fi.stations
+		<< fi.cargo_names;*/
 	return *this << fi.hdr
 		<< fi.version
 		<< fi.order_lists
@@ -309,48 +254,36 @@ json_ofile& json_ofile::operator<<(const railnet_file_info& fi)
 		<< fi.cargo_names;
 }
 
-void serialize(const cargo_info& ci, std::ostream& o)
+RailnetOfile& RailnetOfile::operator<<(const CargoInfo& ci)
 {
-//	serialize(ci.label, o);
-	serialize(ci.fwd, o);
-	serialize(ci.rev, o);
-	serialize(ci.slice, o);
-//	serialize(ci.unit_number, o);
-}
-
-void deserialize(cargo_info& ci, std::istream& i)
-{
-//	deserialize(ci.label, i);
-	deserialize(ci.fwd, i);
-	deserialize(ci.rev, i);
-	deserialize(ci.slice, i);
-//	deserialize(ci.unit_number, i);
-}
-
-json_ofile& json_ofile::operator<<(const cargo_info& ci)
-{
-	struct_guard _(*this);
+	StructGuard _(*this);
+	return *this << ci.fwd
+		<< ci.rev
+		<< ci.slice;
+#if 0
 	return *this <</* ci.label <<*/ ci.fwd << ci.rev << ci.slice;
+#endif
 	//<< ci.unit_number;
 }
 /*
-json_ofile& json_ofile::operator<<(const std::pair<const char, CargoLabel>& pr)
+railnet_writer& railnet_writer::operator<<(const std::pair<const char, CargoLabel>& pr)
 {
 	// TODO: avoid things like "short", they may not fit the 16bit scheme
-	static lbl_conv_t lbl_conv;
+	static LblConvT lbl_conv;
 	std::pair<unsigned short, char[5]> p2;
 	p2.first = pr.first;
-	lbl_conv.convert(pr.second, p2.second);
+	lbl_conv.Convert(pr.second, p2.second);
 	return *this << p2;
 }*/
 
-json_ofile& json_ofile::operator<<(const cargo_label_t& c)
+RailnetOfile& RailnetOfile::operator<<(const CargoLabelT& c)
 {
-	static lbl_conv_t lbl_conv;
-	return *this << lbl_conv.convert(c);
+	static LblConvT lbl_conv;
+//	return *this << lbl_conv.Convert(c);
+	return *this << lbl_conv.Convert(c);
 }
 
-void prechecks(const railnet_file_info& )
+void prechecks(const RailnetFileInfo& )
 {
 	// FEATURE, not done yet
 /*	for(const order_list& ol : file.order_lists())
@@ -370,12 +303,12 @@ void prechecks(const railnet_file_info& )
 }
 
 /*
-json_ofile& json_ofile::operator<<(const std::pair<CargoLabel, cargo_info>& pr)
+railnet_writer& railnet_writer::operator<<(const std::pair<CargoLabel, CargoInfo>& pr)
 {
-	static lbl_conv_t lbl_conv;
-	std::pair<char[5], cargo_info> p2;
+	static LblConvT lbl_conv;
+	std::pair<char[5], CargoInfo> p2;
 	p2.first = pr.first;
-	lbl_conv.convert(pr.first, p2.first);
+	lbl_conv.Convert(pr.first, p2.first);
 	return *this << p2;
 }*/
 

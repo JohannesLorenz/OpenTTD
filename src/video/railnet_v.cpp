@@ -232,7 +232,7 @@ struct DumpStation {
 class AddStation : DumpStation {
 	OrderNonStopFlags nst;
 	const visited_path_t& vp;
-	comm::order_list* new_ol;
+	comm::OrderList* new_ol;
 	void addNode (const st_node_t& node, bool stops) const {
 		const StationID sid = node.sid;
 		if (new_ol->stations().empty() || sid != new_ol->stations().back().first) {
@@ -267,14 +267,14 @@ public:
 	}
 
 	AddStation(OrderNonStopFlags nst, const visited_path_t& vp,
-		comm::order_list* new_ol) : nst(nst), vp(vp), new_ol(new_ol) {}
+		comm::OrderList* new_ol) : nst(nst), vp(vp), new_ol(new_ol) {}
 };
 
-void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Train* train,
+void VideoDriver_Railnet::SaveOrderList(comm::RailnetFileInfo& file, const Train* train,
 	std::vector<bool>& stations_used, std::set<CargoLabel>& cargo_used,
 	std::set<const OrderList*>& order_lists_done, node_list_t& node_list) const
 {
-	comm::order_list new_ol;
+	comm::OrderList new_ol;
 
 	if (!train->orders.list)
 	 return;
@@ -452,7 +452,7 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 	} else {
 		std::map<UnitID, node_list_t::superset_type> matches;
 
-		comm::order_list* match = NULL;
+		comm::OrderList* match = NULL;
 
 		new_ol.unit_number = train->unitnumber;
 
@@ -461,7 +461,7 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 			if (v->cargo_cap) {
 				if (CargoSpec::Get(v->cargo_type)->IsValid()) {
 					CargoLabel lbl = CargoSpec::Get(v->cargo_type)->label;
-					new_ol.cargo().insert(std::make_pair(lbl, comm::cargo_info {true, false, 0/*,
+					new_ol.cargo().insert(std::make_pair(lbl, comm::CargoInfo {true, false, 0/*,
 						train->unitnumber, no_unit_no*/} ));
 #ifdef DEBUG_GRAPH_CARGO
 					std::cerr << " " << (char)(lbl >> 24)
@@ -504,7 +504,7 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 
 			// get the order list with the ID from matches
 			// unfortunately, we need to look it up by scanning the whole order list...
-			for(std::list<comm::order_list>::iterator it = file.order_lists().begin();
+			for(std::list<comm::OrderList>::iterator it = file.order_lists().begin();
 				it != file.order_lists().end() && !match; ++it)
 			// for(auto it2 = it->cargo().begin(); it2 != it->cargo().end(); ++it2)
 			{
@@ -544,17 +544,17 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 
 			// step (1) + (2)
 			int reserved_for_new = match->next_cargo_slice++;
-			for(std::map<cargo_label_t, comm::cargo_info>::const_iterator new_i = new_ol.cargo().begin();
+			for(std::map<CargoLabelT, comm::CargoInfo>::const_iterator new_i = new_ol.cargo().begin();
 				new_i != new_ol.cargo().end(); ++new_i)
 			{
-//				std::set<comm::cargo_info>::const_iterator in_match = match->cargo().find(new_i->first);
-				std::map<cargo_label_t, comm::cargo_info>::iterator in_match
+//				std::set<comm::CargoInfo>::const_iterator in_match = match->cargo().find(new_i->first);
+				std::map<CargoLabelT, comm::CargoInfo>::iterator in_match
 					= match->cargo().find(new_i->first);
 				if(in_match == match->cargo().end())
 				{ // step (1)
 					match->cargo().insert(std::make_pair(
 						new_i->first,
-						comm::cargo_info {is_same, !is_same, reserved_for_new/*,
+						comm::CargoInfo {is_same, !is_same, reserved_for_new/*,
 							is_same ? train->unitnumber : no_unit_no,
 							is_same ? no_unit_no : train->unitnumber*/
 							}
@@ -637,7 +637,7 @@ void VideoDriver_Railnet::SaveOrderList(comm::railnet_file_info& file, const Tra
 			}
 		}
 
-		for (std::map<cargo_label_t, comm::cargo_info>::const_iterator citr = new_ol.cargo().begin();
+		for (std::map<CargoLabelT, comm::CargoInfo>::const_iterator citr = new_ol.cargo().begin();
 			citr != new_ol.cargo().end(); ++citr) {
 			cargo_used.insert(citr->first);
 		}
@@ -660,7 +660,7 @@ float coord_of(uint orig)
 	return orig / scale + offset;
 }
 
-void VideoDriver_Railnet::SaveStation(comm::railnet_file_info& file, const struct BaseStation* st,
+void VideoDriver_Railnet::SaveStation(comm::RailnetFileInfo& file, const struct BaseStation* st,
 	const std::vector<bool> &stations_used) const
 {
 	static char buf[256];
@@ -668,7 +668,7 @@ void VideoDriver_Railnet::SaveStation(comm::railnet_file_info& file, const struc
 		const TileIndex& center = st->train_station.GetCenterTile();
 		SetDParam(0, st->index); GetString(buf, STR_STATION_NAME, lastof(buf));
 
-		comm::station_info tmp_station;
+		comm::StationInfo tmp_station;
 		tmp_station.name.get() = buf;
 		tmp_station.x.get() = coord_of(MapSizeX() - TileX(center));
 		tmp_station.y.get() = coord_of(MapSizeY() - TileY(center));
@@ -676,7 +676,7 @@ void VideoDriver_Railnet::SaveStation(comm::railnet_file_info& file, const struc
 	}
 }
 
-void VideoDriver_Railnet::SaveCargoLabels(comm::railnet_file_info &file, std::set<CargoLabel>& s) const
+void VideoDriver_Railnet::SaveCargoLabels(comm::RailnetFileInfo &file, std::set<CargoLabel>& s) const
 {
 	int count = 0;
 	for (std::set<CargoLabel>::const_iterator itr = s.begin(); itr != s.end(); ++itr)
@@ -700,7 +700,7 @@ void VideoDriver_Railnet::MainLoop()
 		assert(false);
 	}
 
-	comm::railnet_file_info file;
+	comm::RailnetFileInfo file;
 
 	std::vector<bool> stations_used;
 	std::set<CargoLabel> cargo_used;
@@ -748,7 +748,7 @@ void VideoDriver_Railnet::MainLoop()
 	FOR_ALL_BASE_STATIONS(st) { SaveStation(file, st, stations_used); }
 
 	std::cerr << "Calculating cargo labels..." << std::endl;
-/*	for(const comm::order_list& ol : file.order_lists())
+/*	for(const comm::OrderList& ol : file.order_lists())
 	for(const auto& pr : ol.cargo())
 	{
 		//cargo_
@@ -757,9 +757,9 @@ void VideoDriver_Railnet::MainLoop()
 
 	std::cerr << "Serializing " << file.order_lists.get().size() << " order lists..." << std::endl;
 	//serialize(file, std::cout);
-	//comm::json_ofile(std::cout) << comm::smem<comm::railnet_file_info, comm::s_railnet>(file);
+	//comm::json_ofile(std::cout) << comm::smem<comm::RailnetFileInfo, comm::s_railnet>(file);
 
 	comm::prechecks(file);
-	comm::json_ofile(std::cout) << file;
+	comm::RailnetOfile(std::cout) << file;
 }
 
