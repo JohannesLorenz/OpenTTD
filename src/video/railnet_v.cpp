@@ -237,9 +237,6 @@ class AddStation : DumpStation {
 		const StationID sid = node.sid;
 		if (new_ol->stations().empty() || sid != new_ol->stations().back().first) {
 			new_ol->stations().push_back(std::make_pair(sid, stops));
-/*			if (stops) {
-				new_ol->min_station() = std::min(new_ol->min_station(), sid);
-			}*/
 		}
 	}
 public:
@@ -272,7 +269,7 @@ public:
 
 void VideoDriver_Railnet::SaveOrderList(comm::RailnetFileInfo& file, const Train* train,
 	std::vector<bool>& stations_used, std::set<CargoLabel>& cargo_used,
-	std::set<const OrderList*>& order_lists_done, node_list_t& node_list) const
+	std::set<const OrderList*>& order_lists_done, NodeListT& node_list) const
 {
 	comm::OrderList new_ol;
 
@@ -294,7 +291,6 @@ void VideoDriver_Railnet::SaveOrderList(comm::RailnetFileInfo& file, const Train
 		if (v->cargo_cap) {
 			if (CargoSpec::Get(v->cargo_type)->IsValid()) {
 				CargoLabel lbl = CargoSpec::Get(v->cargo_type)->label;
-				new_ol.cargo().insert(cargo_info{ lbl, } );
 #ifdef DEBUG_GRAPH_CARGO
 				std::cerr << " " << (char)(lbl >> 24)
 					<< (char)((lbl >> 16) & 0xFF)
@@ -450,7 +446,7 @@ void VideoDriver_Railnet::SaveOrderList(comm::RailnetFileInfo& file, const Train
 	if (new_ol.stations().empty()) {
 		this_is_a_new_line = false; // consider this already added
 	} else {
-		std::map<UnitID, node_list_t::superset_type> matches;
+		std::map<UnitID, NodeListT::SupersetType> matches;
 
 		comm::OrderList* match = NULL;
 
@@ -474,14 +470,14 @@ void VideoDriver_Railnet::SaveOrderList(comm::RailnetFileInfo& file, const Train
 			}
 		}
 
-		node_list.init_rest(new_ol);
+		node_list.InitRest(new_ol);
 
 		// add new_ol to the other order lists from node_list
 		// if new_ol will be discarded, this will not harm (TODO: but may harm runtime...?)
-		bool is_same = node_list.traverse(new_ol, &matches, false, true) & node_list_t::is_same_train,
+		bool is_same = node_list.Traverse(new_ol, &matches, false, true) & NodeListT::IS_SAME_TRAIN,
 			is_rev = false;
 		if(!is_same)
-			is_rev = node_list.traverse(new_ol, &matches, true, true) & node_list_t::is_same_train;
+			is_rev = node_list.Traverse(new_ol, &matches, true, true) & NodeListT::IS_SAME_TRAIN;
 
 		if(is_same || is_rev)
 		{
@@ -490,8 +486,8 @@ void VideoDriver_Railnet::SaveOrderList(comm::RailnetFileInfo& file, const Train
 			this_is_a_new_line = false;
 
 			UnitID the_match = std::numeric_limits<UnitID>::max();
-			for(const std::pair<const UnitID, node_list_t::superset_type> pr : matches)
-			if(pr.second & node_list_t::is_same_train)
+			for(const std::pair<const UnitID, NodeListT::SupersetType> pr : matches)
+			if(pr.second & NodeListT::IS_SAME_TRAIN)
 			{
 				if(the_match == std::numeric_limits<UnitID>::max())
 				 the_match = pr.first;
@@ -515,12 +511,6 @@ void VideoDriver_Railnet::SaveOrderList(comm::RailnetFileInfo& file, const Train
 			 throw "train ID not found, logical programmer error";
 		}
 
-/*		bool added_is_subset = std::includes(new_ol.cargo().begin(), new_ol.cargo().end(),
-			match->cargo().begin(), match->cargo().end());
-		bool new_is_subset = std::includes(match->cargo().begin(), match->cargo().end(),
-			new_ol.cargo().begin(), new_ol.cargo().end());
-
-		if(is_same)*/
 		if(is_same || is_rev){
 			// case 1: order + direction are the same,
 			// (just the starting point may be different)
@@ -547,7 +537,6 @@ void VideoDriver_Railnet::SaveOrderList(comm::RailnetFileInfo& file, const Train
 			for(std::map<CargoLabelT, comm::CargoInfo>::const_iterator new_i = new_ol.cargo().begin();
 				new_i != new_ol.cargo().end(); ++new_i)
 			{
-//				std::set<comm::CargoInfo>::const_iterator in_match = match->cargo().find(new_i->first);
 				std::map<CargoLabelT, comm::CargoInfo>::iterator in_match
 					= match->cargo().find(new_i->first);
 				if(in_match == match->cargo().end())
@@ -589,37 +578,7 @@ void VideoDriver_Railnet::SaveOrderList(comm::RailnetFileInfo& file, const Train
 				if(match_i->se
 				 match_i->second.slice = match->next_cargo_slice;
 			}*/
-#if 0
-			// all cargo not found => one new id
-			// all cargo found => one new id
-			for(std::set<cargo_info>::const_iterator match_i = match->cargo.begin(),
-				new_i = new_ol.cargo.begin();
-				match_i != match->cargo.end() && new_i != new_ol.cargo.end();
-				)
-			{
-				if(new_i->slice < match_i->slice)
-				{
-					// match does not
-				}
-			}
-			match->
-			++match->next_cargo_slice;
-
-			added.cargo().insert(new_ol.cargo().begin(), new_ol.cargo().end());
-			cargo_used.insert(new_ol.cargo().begin(), new_ol.cargo().end());
-#endif
 		}
-#if 0
-		else if(added_is_subset && new_is_subset && already_added.is_cycle && is_rev) {
-			// why do we summarize cycles to bicycles? one reason is that trains of either direction
-			// usually have the same line
-
-			already_added.is_cycle = false;
-			already_added.is_bicycle = true;
-			//already_added.rev_unit_no = cur_ol.unit_number;
-			// for bicycle, no need to add another
-		} // for all already added order lists
-#endif
 	}
 
 	if (this_is_a_new_line) {
@@ -648,12 +607,12 @@ void VideoDriver_Railnet::SaveOrderList(comm::RailnetFileInfo& file, const Train
 		// however, passengers wanting to go C->B might get
 		// confused that their train turns around
 		
-		node_list.init_nodes(new_ol);
+		node_list.InitNodes(new_ol);
 		file.order_lists().push_back(new_ol);
 	}
 }
 
-float coord_of(uint orig)
+float CoordOf(uint orig)
 {
 	const float scale = 25.0f;
 	const uint offset = 2.0f;
@@ -669,9 +628,9 @@ void VideoDriver_Railnet::SaveStation(comm::RailnetFileInfo& file, const struct 
 		SetDParam(0, st->index); GetString(buf, STR_STATION_NAME, lastof(buf));
 
 		comm::StationInfo tmp_station;
-		tmp_station.name.get() = buf;
-		tmp_station.x.get() = coord_of(MapSizeX() - TileX(center));
-		tmp_station.y.get() = coord_of(MapSizeY() - TileY(center));
+		tmp_station.name.Get() = buf;
+		tmp_station.x.Get() = CoordOf(MapSizeX() - TileX(center));
+		tmp_station.y.Get() = CoordOf(MapSizeY() - TileY(center));
 		file.stations().insert(std::make_pair(st->index, tmp_station));
 	}
 }
@@ -715,7 +674,7 @@ void VideoDriver_Railnet::MainLoop()
 
 	std::set<const OrderList*> order_lists_done;
 	std::cerr << "Calculating order lists... ";
-	node_list_t node_list;
+	NodeListT node_list;
 	FOR_ALL_TRAINS(train) {
 		std::cerr << std::setw(3) << cur_train*100/n_trains << "%";
 		SaveOrderList(file, train, stations_used, cargo_used, order_lists_done, node_list);
@@ -748,14 +707,9 @@ void VideoDriver_Railnet::MainLoop()
 	FOR_ALL_BASE_STATIONS(st) { SaveStation(file, st, stations_used); }
 
 	std::cerr << "Calculating cargo labels..." << std::endl;
-/*	for(const comm::OrderList& ol : file.order_lists())
-	for(const auto& pr : ol.cargo())
-	{
-		//cargo_
-	}*/
 	SaveCargoLabels(file, cargo_used);
 
-	std::cerr << "Serializing " << file.order_lists.get().size() << " order lists..." << std::endl;
+	std::cerr << "Serializing " << file.order_lists.Get().size() << " order lists..." << std::endl;
 	//serialize(file, std::cout);
 	//comm::json_ofile(std::cout) << comm::smem<comm::RailnetFileInfo, comm::s_railnet>(file);
 

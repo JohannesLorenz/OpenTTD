@@ -63,12 +63,12 @@ class SMem
 {
 	T val;
 public:
-	T& get() { return val; }
-	const T& get() const { return val; }
-	operator T& () { return get(); }
-	operator const T& () const { return get(); }
-	T& operator()() { return get(); }
-	const T& operator()() const { return get(); }
+	T& Get() { return val; }
+	const T& Get() const { return val; }
+	operator T& () { return Get(); }
+	operator const T& () const { return Get(); }
+	T& operator()() { return Get(); }
+	const T& operator()() const { return Get(); }
 	SMem() {}
 	SMem(const T& val) : val(val) {}
 };
@@ -98,13 +98,11 @@ protected:
 	public:
 		_StructDepth& operator++() { return ++depth, _first = true, *this; }
 		_StructDepth& operator--() { return --depth, _first = false, *this; }
-		_StructDepth() : depth(0), _first(true) {
-
-		}
+		_StructDepth() : depth(0), _first(true) {}
 
 		operator char() const { return depth; }
 
-		bool first() {
+		bool First() {
 			bool res = _first; _first = false; return res;
 		}
 	} struct_depth;
@@ -144,31 +142,31 @@ public:
 		return m;
 	}
 
-	/*start*/
+	/* start of unused code */
 	const static int linewidth = 79;
 	const static int max_keylength = 24;
 	template<class T>
-	static int mwidth(const T& num) {
+	static int MWidth(const T& num) {
 		return ::logf(num) + 1 + (num < 0); // FEATURE: use non float algorithm
 	}
 
-	static int est(const bool& b) { return b ? 4 : 5; }
-	static int est(const std::uint8_t& b) { return mwidth(b); } // FEATURE: log10
-	static int est(const std::uint16_t& i) { return mwidth(i); }
-	static int est(const std::uint32_t& i) { return mwidth(i); }
-	static int est(const std::int32_t& i) { return mwidth(i); }
-	static int est(const std::size_t& i) { return mwidth(i); }
-	static int est(const char& ) { return 3; }
-	static int est(const float& ) { return 20; }
-	static int est(const char* s) { return 2 + strlen(s); }
-	static int est(const std::string& s) { return 2 + s.length(); }
+	static int Est(const bool& b) { return b ? 4 : 5; }
+	static int Est(const std::uint8_t& b) { return MWidth(b); } // FEATURE: log10
+	static int Est(const std::uint16_t& i) { return MWidth(i); }
+	static int Est(const std::uint32_t& i) { return MWidth(i); }
+	static int Est(const std::int32_t& i) { return MWidth(i); }
+	static int Est(const std::size_t& i) { return MWidth(i); }
+	static int Est(const char& ) { return 3; }
+	static int Est(const float& ) { return 20; }
+	static int Est(const char* s) { return 2 + strlen(s); }
+	static int Est(const std::string& s) { return 2 + s.length(); }
 	template<class T1, class T2>
-	static int est(const std::pair<T1, T2>& p) { return 4 + est(p.first) + est(p.second); }
+	static int Est(const std::pair<T1, T2>& p) { return 4 + Est(p.first) + Est(p.second); }
 	template<class T>
-	static int est(const T& ) { return linewidth << 1; }
+	static int Est(const T& ) { return linewidth << 1; }
 	int remain;
 	int used;
-	/*end*/
+	/* end of unused code */
 
 	template<class Cont>
 	Crtp& operator<<(const Cont& v)
@@ -183,7 +181,7 @@ public:
 			init_remain -
 			max_keylength - // assumed key lenght
 			4; // apostrophes for key, ': ' + comma at the end
-		int remain2 = remain - est(v.begin());
+		int remain2 = remain - Est(v.begin());
 
 		bool nextline = true; //remain2 < 0;
 		const char* nsep = nextline ? "[\n" : "[";
@@ -198,7 +196,7 @@ public:
 		m << *(it++);
 		for(; it != v.end(); ++it)
 		{
-			remain2 = remain - est(*it);
+			remain2 = remain - Est(*it);
 			nextline = true; /*remain2 < 0;*/
 			if(nextline) m << raw(",\n") << ident();
 			else m << raw(", ");
@@ -235,7 +233,7 @@ public:
 	template<class T, std::size_t StringId>
 	Crtp& operator<<(const SMem<T, StringId>& _SMem)
 	{
-		if(!struct_depth.first())
+		if(!struct_depth.First())
 		  m << raw(",\n") << ident();
 		m << m.StringNo(StringId) << raw(": ");
 		return m << ((const T&)_SMem);
@@ -380,7 +378,7 @@ protected:
 		{
 	//		std::cerr << "key: " << recent << std::endl;
 			recent.clear();
-			m >> MustRead<':'>() >> s.get();
+			m >> MustRead<':'>() >> s.Get();
 			return true;
 		}
 		else return false;
