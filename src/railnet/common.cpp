@@ -183,7 +183,7 @@ RailnetOfile& RailnetOfile::operator<<(const CargoLabelT& c)
 	return *this << lbl_conv.Convert(c);
 }
 
-void prechecks(const RailnetFileInfo& )
+void Prechecks(const RailnetFileInfo& )
 {
 	// FEATURE, not done yet
 /*	for(const order_list& ol : file.order_lists())

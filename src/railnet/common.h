@@ -128,11 +128,9 @@ struct OrderList
 	SMem<UnitID, S_REV_UNIT_NO> rev_unit_no;
 	SMem<bool, S_IS_CYCLE> is_cycle;
 	SMem<bool, S_IS_BICYCLE> is_bicycle; //! at least two trains that drive in opposite cycles
-//	SMem<StationID, s_min_station> min_station;
 	SMem<std::map<CargoLabelT, CargoInfo>, S_CARGO> cargo; // cargo order and amount does not matter
 	int next_cargo_slice;
 	SMem<std::vector<std::pair<StationID, bool> >, S_STATIONS> stations;
-//	SMem<std::size_t, s_real_stations> real_stations;
 	OrderList() :
 		unit_number(no_unit_no),
 		rev_unit_no(no_unit_no),
@@ -231,7 +229,7 @@ public:
 };
 
 //! @a yet unused
-void prechecks(const RailnetFileInfo& file);
+void Prechecks(const RailnetFileInfo& file);
 
 } // namespace comm
 
