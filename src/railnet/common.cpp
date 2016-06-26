@@ -35,7 +35,6 @@ const char* strings[S_SIZE] =
 	"unit_number",
 	"rev_unit_no",
 	"is_cycle",
-	"is_bicycle",
 	"min_station",
 	"cargo",
 	"stations",
@@ -47,11 +46,9 @@ const char* strings[S_SIZE] =
 	"cargo_names",
 	"version",
 	"filetype",
-	"label",
 	"fwd",
 	"rev",
 	"slice",
-	"railnet",
 	"mimetype",
 };
 
@@ -68,7 +65,7 @@ const char* RailnetStrings::StringNo(std::size_t id) {
 bool RailnetIfile::Once(OrderList& ol)
 {
 	return		Try(ol.is_cycle)
-			|| Try(ol.is_bicycle)
+			//|| Try(ol.is_bicycle)
 			//		|| Try(ol.min_station)
 			|| Try(ol.cargo)
 			|| Try(ol.stations)
@@ -80,7 +77,7 @@ RailnetOfile& RailnetOfile::operator<<(const OrderList& ol)
 {
 	StructGuard _(*this);
 	return	*this << ol.is_cycle
-		<< ol.is_bicycle
+		//<< ol.is_bicycle
 //		<< ol.min_station
 		<< ol.cargo
 		<< ol.stations

@@ -70,6 +70,10 @@ public:
 	}
 };
 
+/**
+ * Wrapper around CargoLabel class, in order to treat it diferently
+ * in the json file.
+ */
 struct CargoLabelT
 {
 	CargoLabel lbl;
@@ -82,12 +86,12 @@ struct CargoLabelT
 namespace comm
 {
 
+/** string IDs, as used by the SMem class */
 enum StrId
 {
 	S_UNIT_NUMBER,
 	S_REV_UNIT_NO,
 	S_IS_CYCLE,
-	S_IS_BICYCLE,
 	S_MIN_STATION,
 	S_CARGO,
 	S_STATIONS,
@@ -99,11 +103,9 @@ enum StrId
 	S_CARGO_NAMES,
 	S_VERSION,
 	S_FILETYPE,
-	S_LABEL, // TODO: REQUIRED?
-	S_FWD, // TODO: REQ?
-	S_REV, // TODO: REQ?
+	S_FWD,
+	S_REV,
 	S_SLICE,
-	S_RAILNET,
 	S_MIMETYPE,
 	S_SIZE
 };
@@ -127,14 +129,14 @@ struct OrderList
 	SMem<UnitID, S_UNIT_NUMBER> unit_number;
 	SMem<UnitID, S_REV_UNIT_NO> rev_unit_no;
 	SMem<bool, S_IS_CYCLE> is_cycle;
-	SMem<bool, S_IS_BICYCLE> is_bicycle; //! at least two trains that drive in opposite cycles
+//	SMem<bool, S_IS_BICYCLE> is_bicycle; //! at least two trains that drive in opposite cycles
 	SMem<std::map<CargoLabelT, CargoInfo>, S_CARGO> cargo; // cargo order and amount does not matter
 	int next_cargo_slice;
 	SMem<std::vector<std::pair<StationID, bool> >, S_STATIONS> stations;
 	OrderList() :
 		unit_number(no_unit_no),
 		rev_unit_no(no_unit_no),
-		is_cycle(false), is_bicycle(false), next_cargo_slice(1) /*,
+		is_cycle(false) /*, is_bicycle(false)*/, next_cargo_slice(1) /*,
 		min_station(std::numeric_limits<StationID>::max()),
 		real_stations(0)*/
 	{
@@ -183,6 +185,7 @@ struct RailnetFileInfo
 	RailnetFileInfo() : hdr("openttd/railnet"), version(_version) {}
 };
 
+/** Class assigning string to SMem ids */
 struct RailnetStrings
 {
 	const char* StringNo(std::size_t id);

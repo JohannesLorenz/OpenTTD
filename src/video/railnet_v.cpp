@@ -7,6 +7,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <http://www.gnu.org/licenses/>.
  */
 
+/** @file railnet_v.cpp implementation of railnet video driver class */
+
 #include "../stdafx.h"
 
 #include <iostream>

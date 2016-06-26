@@ -7,6 +7,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <http://www.gnu.org/licenses/>.
  */
 
+/** @file railnet_v.h declaration of VideoDriver_Railnet */
+
 #ifndef GRAPH_V_H
 #define GRAPH_V_H
 
@@ -19,6 +21,10 @@ namespace comm {
 	struct RailnetFileInfo;
 }
 
+/**
+ * Video driver that does not blit. Instead, it outputs a
+ * railnet json file.
+ */
 class VideoDriver_Railnet : public VideoDriver_Null {
 	void SaveOrderList(comm::RailnetFileInfo& file, const Train *train,
 		std::vector<bool> &stations_used, std::set<CargoLabel> &cargo_used, std::set<const OrderList *> &order_lists_done,
