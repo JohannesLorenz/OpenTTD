@@ -17,7 +17,10 @@
 #define NIP_END() { NULL, 0, 0, 0, 0 }
 
 /* Helper for filling callback tables */
-#define NIC(cb_id, base, variable, bit) { #cb_id, cpp_offsetof(base, variable), cpp_sizeof(base, variable), bit, cb_id }
+/* the cast to ptrdiff_t is OK for this use case */
+#define NIC(cb_id, base, variable, bit) \
+	{ #cb_id, static_cast<ptrdiff_t>(cpp_offsetof(base, variable)), \
+		cpp_sizeof(base, variable), bit, cb_id }
 #define NIC_END() { NULL, 0, 0, 0, 0 }
 
 /* Helper for filling variable tables */

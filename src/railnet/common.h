@@ -29,13 +29,13 @@
 #include <set>
 #include <iosfwd>
 #include <limits>
-#include <cstring> // TODO: cpp?
 #include <list>
 #include <string>
 #include <cmath>
 #include <algorithm>
 
 #ifdef EXPORTER
+// the railnet exporter shall not include any OpenTTD sources
 #include <cstdint>
 typedef uint8_t byte;
 typedef uint16_t uint16;

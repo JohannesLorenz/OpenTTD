@@ -12,6 +12,8 @@
 #ifndef RANDOM_FUNC_HPP
 #define RANDOM_FUNC_HPP
 
+#include "../stdafx.h"
+
 #if defined(__APPLE__)
 	/* Apple already has Random declared */
 	#define Random OTTD_Random
