@@ -9,6 +9,7 @@
 
 /** @file railnet_v.cpp implementation of railnet video driver class */
 
+#if __cplusplus >= 201103L || defined(IDE_USED)
 #include "../stdafx.h"
 
 #include <iostream>
@@ -718,4 +719,6 @@ void VideoDriver_Railnet::MainLoop()
 	// comm::prechecks(file);
 	comm::RailnetOfile(std::cout) << file;
 }
+
+#endif // C++11 support
 

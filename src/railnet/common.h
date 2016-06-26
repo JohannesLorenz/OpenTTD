@@ -1,4 +1,4 @@
-/* $Id$ */
+﻿/* $Id$ */
 
 /*
  * This file is part of OpenTTD.
@@ -12,6 +12,15 @@
  *	the railnet video driver (ingame) and the railnet utility
  */
 
+#if __cplusplus >= 201103L
+	#define OTTD_CPP11_SUPPORT
+#endif
+
+#if defined(OTTD_CPP11_SUPPORT) || defined(IDE_USED)
+	#define COMPILE_RAILNET
+#endif
+
+#ifdef COMPILE_RAILNET
 #ifndef COMMON_H
 #define COMMON_H
 
@@ -236,5 +245,6 @@ void Prechecks(const RailnetFileInfo& file);
 
 } // namespace comm
 
+#endif
 #endif
 

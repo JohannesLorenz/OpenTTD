@@ -12,6 +12,7 @@
  * json files
  */
 
+#if __cplusplus >= 201103L || defined(IDE_USED)
 #ifndef JSON_STATIC_H
 #define JSON_STATIC_H
 
@@ -521,4 +522,5 @@ public:
 };
 
 #endif // JSON_STATIC_H
+#endif // C++11 support
 
