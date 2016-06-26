@@ -16,6 +16,8 @@
 #include <iostream>
 #include "common.h"
 
+#ifdef COMPILE_RAILNET
+
 namespace comm {
 
 namespace dtl {
@@ -211,3 +213,4 @@ railnet_writer& railnet_writer::operator<<(const std::pair<CargoLabel, CargoInfo
 
 }
 
+#endif

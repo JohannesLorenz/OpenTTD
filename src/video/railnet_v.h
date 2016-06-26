@@ -9,8 +9,9 @@
 
 /** @file railnet_v.h declaration of VideoDriver_Railnet */
 
-#ifndef GRAPH_V_H
-#define GRAPH_V_H
+#if __cplusplus >= 201103L || defined(IDE_USED)
+#ifndef RAILNET_V_H
+#define RAILNET_V_H
 
 #include "null_v.h"
 #include <vector>
@@ -46,4 +47,6 @@ public:
 	/* virtual */ Driver *CreateInstance() const { return new VideoDriver_Railnet(); }
 };
 
-#endif // GRAPH_V_H
+#endif // RAILNET_V_H
+#endif
+

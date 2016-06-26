@@ -11,6 +11,8 @@
  * @file json_static.cpp implementation of json classes
  */
 
+#if __cplusplus >= 201103L || defined(IDE_USED)
+
 #include "json_static.h"
 
 void JsonIfileBase::ReadBool(bool& b, std::istream* is)
@@ -54,3 +56,4 @@ void JsonIfileBase::ReadCStr(char* s, std::istream* is)
 	}
 }
 
+#endif // C++11 support
