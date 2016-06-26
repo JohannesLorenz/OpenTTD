@@ -11,6 +11,7 @@
  * @file railnet_node_list.h implementation of the node_list_t class
  */
 
+#ifdef COMPILE_RAILNET
 #include "railnet_node_list.h"
 
 void NodeListT::Visit(UnitID u, StationID s, NodeListT::times_t nth) {
@@ -238,3 +239,5 @@ int NodeListT::Traverse(const comm::OrderList &ol, std::map<UnitID, NodeListT::S
 
 	return result;
 }
+
+#endif
