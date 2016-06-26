@@ -9,7 +9,7 @@
 
 /**
  * @file json_static.h defines classes to read and write generic
- *	json files
+ * json files
  */
 
 #ifndef JSON_STATIC_H
