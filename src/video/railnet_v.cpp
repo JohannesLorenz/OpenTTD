@@ -713,7 +713,7 @@ void VideoDriver_Railnet::MainLoop()
 	//serialize(file, std::cout);
 	//comm::json_ofile(std::cout) << comm::smem<comm::RailnetFileInfo, comm::s_railnet>(file);
 
-	comm::prechecks(file);
+	// comm::prechecks(file);
 	comm::RailnetOfile(std::cout) << file;
 }
 
